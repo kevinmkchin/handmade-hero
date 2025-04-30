@@ -194,7 +194,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     Win32ResizeDIBSection(&GlobalBackbuffer, 1280, 720);
 
     WNDCLASS WindowClass = {};
-    WindowClass.style = CS_HREDRAW|CS_VREDRAW;
+    WindowClass.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     WindowClass.hInstance = Instance;
     //WindowClass.hIcon = ;
@@ -218,6 +218,11 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             NULL);      // Additional application data
         if(Window)
         {
+            // NOTE(Kevin): Since we specified CS_OWNDC, we can just
+            // get one device context and use it forever because we
+            // are not sharing it with anyone.
+            HDC DeviceContext = GetDC(Window);
+
             int XOffset = 0;
             int YOffset = 0;
 
@@ -238,15 +243,14 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
                 RenderWeirdGradient(GlobalBackbuffer, XOffset, YOffset);
 
-                HDC DeviceContext = GetDC(Window);
                 win32_window_dimension Dimension = Win32GetWindowDimension(Window);
                 Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, 
                     GlobalBackbuffer, 0, 0, Dimension.Width, Dimension.Height);
-                ReleaseDC(Window, DeviceContext);
-
                 ++XOffset;
                 ++YOffset;
             }
+
+            ReleaseDC(Window, DeviceContext);
         }
         else
         {

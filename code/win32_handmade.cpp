@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define internal static         // static functions are internal to the translation unit
 #define local_persist static    // local static variable
@@ -26,6 +27,15 @@ struct win32_offscreen_buffer
 
 global_static bool GlobalRunning;
 global_static win32_offscreen_buffer GlobalBackbuffer;
+
+void OpenConsole()
+{
+    AllocConsole();                          // Allocates a new console
+    FILE* fp;
+    freopen_s(&fp, "CONOUT$", "w", stdout);  // Redirect stdout to the new console
+    freopen_s(&fp, "CONOUT$", "w", stderr);  // Redirect stderr (optional)
+    freopen_s(&fp, "CONIN$", "r", stdin);    // Redirect stdin (optional)
+}
 
 struct win32_window_dimension
 {
@@ -179,6 +189,8 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 int CALLBACK 
 WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode)
 {
+    OpenConsole();
+    printf("Handmade Hero\n");
     Win32ResizeDIBSection(&GlobalBackbuffer, 1280, 720);
 
     WNDCLASS WindowClass = {};

@@ -15,6 +15,7 @@ typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
+typedef int32 bool32;
 
 struct win32_offscreen_buffer
 {
@@ -43,7 +44,7 @@ typedef X_INPUT_GET_STATE(x_input_get_state);
 // define a stub with it as well
 X_INPUT_GET_STATE(XInputGetStateStub)
 {
-    return 0;
+    return ERROR_DEVICE_NOT_CONNECTED;
 }
 global_variable x_input_get_state *XInputGetState_ = XInputGetStateStub;
 #define XInputGetState XInputGetState_
@@ -52,7 +53,7 @@ global_variable x_input_get_state *XInputGetState_ = XInputGetStateStub;
 typedef X_INPUT_SET_STATE(x_input_set_state); 
 X_INPUT_SET_STATE(XInputSetStateStub)
 {
-    return 0;
+    return ERROR_DEVICE_NOT_CONNECTED;
 }
 global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
@@ -61,6 +62,10 @@ internal void
 Win32LoadXInput()
 {
     HMODULE XInputLibrary = LoadLibraryA(XINPUT_DLL_A);
+    if (!XInputLibrary)
+    {
+        XInputLibrary = LoadLibraryA("xinput1_3.dll");
+    }
     if (XInputLibrary)
     {
         XInputGetState = (x_input_get_state *)GetProcAddress(XInputLibrary, "XInputGetState");
@@ -200,8 +205,8 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
         case WM_KEYUP:
         {
             uint32 VKCode = WParam;
-            bool WasDown = ((LParam & (1 << 30)) != 0);
-            bool IsDown = ((LParam & (1 << 31)) == 0);
+            bool WasDown = (LParam & (1 << 30)) != 0;
+            bool IsDown = (LParam & (1 << 31)) == 0;
             if (WasDown != IsDown)
             {
                 if (VKCode == 'W')
@@ -245,6 +250,12 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
                 else if (VKCode == VK_SPACE)
                 {
                 }
+            }
+
+            bool32 AltKeyDown = (LParam & (1 << 29));
+            if (AltKeyDown && VKCode == VK_F4)
+            {
+                GlobalRunning = false;
             }
         } break;
 
@@ -329,6 +340,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 }
 
                 // TODO(Kevin): Should we poll this more frequently?
+                // TODO(Kevin): apparently XInputGetState can stall for several ms if the
+                // controller of the index we are polling is not plugged in. should use HID
+                // notification to know how many controllers are plugged in?
                 for (DWORD ControllerIndex = 0;
                     ControllerIndex < XUSER_MAX_COUNT;
                     ++ControllerIndex)
@@ -339,7 +353,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         // NOTE(Kevin): The controller is plugged in
                         // see if ControllerState.dwPacketNumber increments too rapidly
                         XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
-                        
+
                         bool Up = Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
                         bool Down = Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
                         bool Left = Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <xinput.h>
+#include <dsound.h>
 
 #define internal static         // static functions are internal to the translation unit
 #define local_persist static    // local static variable
@@ -58,6 +59,9 @@ X_INPUT_SET_STATE(XInputSetStateStub)
 global_variable x_input_set_state *XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
 
+#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPGUID lpGuid, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter);
+typedef DIRECT_SOUND_CREATE(direct_sound_create);
+
 internal void
 Win32LoadXInput()
 {
@@ -70,6 +74,86 @@ Win32LoadXInput()
     {
         XInputGetState = (x_input_get_state *)GetProcAddress(XInputLibrary, "XInputGetState");
         XInputSetState = (x_input_set_state *)GetProcAddress(XInputLibrary, "XInputSetState");
+    }
+}
+
+internal void
+Win32InitDirectSound(HWND Window, int32 SamplesPerSecond, int32 BufferSize)
+{
+    // NOTE(Kevin): Load the library
+    HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
+
+    if (DSoundLibrary)
+    {
+        // NOTE(Kevin): Get a DirectSound object
+        direct_sound_create *DirectSoundCreate = (direct_sound_create *)
+            GetProcAddress(DSoundLibrary, "DirectSoundCreate");
+
+        IDirectSound *DirectSound;
+        if (DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0)))
+        {
+            WAVEFORMATEX WaveFormat = {};
+            WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
+            WaveFormat.nChannels = 2;
+            WaveFormat.nSamplesPerSec = SamplesPerSecond;
+            WaveFormat.wBitsPerSample = 16;
+            WaveFormat.nBlockAlign = (WaveFormat.nChannels * WaveFormat.wBitsPerSample) / 8;
+            WaveFormat.nAvgBytesPerSec = WaveFormat.nSamplesPerSec * WaveFormat.nBlockAlign;
+            WaveFormat.cbSize = 0;
+
+            if (SUCCEEDED(DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY)))
+            {
+                DSBUFFERDESC BufferDescription = {};
+                BufferDescription.dwSize = sizeof(DSBUFFERDESC);
+                BufferDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+
+                // NOTE(Kevin): Create a primary buffer
+                // TODO(Kevin): DSBCAPS_GLOBALFOCUS?
+                IDirectSoundBuffer *PrimaryBuffer;
+                if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription, &PrimaryBuffer, 0)))
+                {
+                    if (SUCCEEDED(PrimaryBuffer->SetFormat(&WaveFormat)))
+                    {
+                        printf("DSound primary buffer format was set.\n");
+                    }
+                    else
+                    {
+                        // TODO Diagnostic
+                    }
+                }
+                else
+                {
+                    // TODO Diagnostic
+                }
+            }
+            else
+            {
+                // TODO Diagnostic
+            }
+
+            // NOTE(Kevin): Create a secondary buffer
+            // TODO(Kevin): DSBCAPS_GETCURRENTPOSITION2
+            DSBUFFERDESC BufferDescription = {};
+            BufferDescription.dwSize = sizeof(DSBUFFERDESC);
+            BufferDescription.dwFlags = 0;
+            BufferDescription.dwBufferBytes = BufferSize;
+            BufferDescription.lpwfxFormat = &WaveFormat;
+
+            IDirectSoundBuffer *SecondaryBuffer;
+            if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription, &SecondaryBuffer, 0)))
+            {
+                printf("DSound secondary buffer created.\n");
+                // NOTE(Kevin): start it playing
+            }
+        }
+        else
+        {
+            // TODO Diagnostic
+        }
+    }
+    else
+    {
+        // TODO Diagnostic
     }
 }
 
@@ -149,7 +233,7 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height) // 
     Buffer->Info.bmiHeader.biCompression = BI_RGB;
 
     int BitmapMemorySize = (Width * Height) * Buffer->BytesPerPixel;
-    Buffer->Memory = VirtualAlloc(NULL, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+    Buffer->Memory = VirtualAlloc(NULL, BitmapMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 
     Buffer->Pitch = Width * Buffer->BytesPerPixel;
 
@@ -320,6 +404,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             // get one device context and use it forever because we
             // are not sharing it with anyone.
             HDC DeviceContext = GetDC(Window);
+
+            Win32InitDirectSound(Window, 48000, 48000*sizeof(int16)*2);
 
             int XOffset = 0;
             int YOffset = 0;

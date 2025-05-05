@@ -431,6 +431,10 @@ Win32FillSoundBuffer(win32_sound_output *SoundOutput, DWORD ByteToLock, DWORD By
 int CALLBACK 
 WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode)
 {
+    LARGE_INTEGER PerfCountFrequencyResult;
+    QueryPerformanceFrequency(&PerfCountFrequencyResult);
+    int64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
+
     OpenConsole();
     printf("Handmade Hero\n");
 
@@ -486,6 +490,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
             GlobalRunning = true;
+
+            LARGE_INTEGER LastCounter;
+            QueryPerformanceCounter(&LastCounter);
             while (GlobalRunning)
             {
                 MSG Message;
@@ -595,6 +602,17 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     Dimension.Width, Dimension.Height);
 
                 ++XOffset;
+
+                LARGE_INTEGER EndCounter;
+                QueryPerformanceCounter(&EndCounter);
+
+                int64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
+                real32 SecondsElapsed = ((real32)CounterElapsed / (real32)PerfCountFrequency);
+                real32 FPS = ((real32)PerfCountFrequency / (real32)CounterElapsed);
+
+                printf("%f\n", SecondsElapsed);
+
+                LastCounter = EndCounter;
             }
 
             ReleaseDC(Window, DeviceContext);

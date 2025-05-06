@@ -1,13 +1,26 @@
-#include <windows.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <xinput.h>
-#include <dsound.h>
-#include <math.h>
+/*
+Platform Layer TODO
 
-#define internal static         // static functions are internal to the translation unit
-#define local_persist static    // local static variable
-#define global_variable static    // global static variable
+- Saved game locations
+- Getting a handle to our own executable file
+- Asset loading path
+- Threading (launch a thread)
+- Raw Input (support for multiple keyboards)
+- Sleep/timeBeginPeriod
+- ClipCursor (multimonitor support)
+- Fullscreen support
+- WM_SETCURSOR (control cursor visibility)
+- WM_ACTIVATEAPP (for when we are not the active application)
+- Hardware acceleration (OpenGL or Direct3D)
+- GetKeyboardLayout (for French keyboards, international WASD support)
+
+*/
+
+#include <stdint.h>
+
+#define internal static             // static functions are internal to the translation unit
+#define local_persist static        // local static variable
+#define global_variable static      // global static variable
 
 #define Pi32 3.14159265359f
 
@@ -22,6 +35,14 @@ typedef uint64_t uint64;
 typedef int32 bool32;
 typedef float real32;
 typedef double real64;
+
+#include "handmade.cpp"
+
+#include <windows.h>
+#include <stdio.h>
+#include <xinput.h>
+#include <dsound.h>
+#include <math.h>
 
 struct win32_offscreen_buffer
 {
@@ -186,35 +207,6 @@ Win32GetWindowDimension(HWND Window)
 }
 
 internal void
-RenderWeirdGradient(win32_offscreen_buffer *Buffer, int XOffset, int YOffset)
-{
-    uint8 *Row = (uint8 *)Buffer->Memory;
-    for (int Y = 0; Y < Buffer->Height; ++Y)
-    {
-        uint32 *Pixel = (uint32 *)Row;
-        for (int X = 0; X < Buffer->Width; ++X)
-        {
-            /*
-                In Windows, RGBx is stored as BGRx
-                Pixel in memory: BB GG RR xx
-                Which, following LITTLE ENDIAN, becomes:
-                0x xx RR GG BB
-            */
-            uint8 Green = (uint8)(Y + YOffset);
-            uint8 Blue = (uint8)(X + XOffset);
-            uint8 Red = 0;
-
-            *Pixel++ = (0 << 24)
-                | (Red << 16)
-                | (Green << 8)
-                | (Blue << 0);
-        }
-
-        Row += Buffer->Pitch;
-    }
-}
-
-internal void
 Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height) // DIB: Device Independent Bitmap
 {
     if(Buffer->Memory)
@@ -360,8 +352,7 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 
         default:
         {
-//          OutputDebugStringA("default\n");
-            Result = DefWindowProc(Window, Message, WParam, LParam);
+            Result = DefWindowProcA(Window, Message, WParam, LParam);
         } break;
     }
 
@@ -555,7 +546,6 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
                         if (AButton)
                         {
-                            ++YOffset;
                             XINPUT_VIBRATION ControllerVibration;
                             ControllerVibration.wLeftMotorSpeed = 60000;
                             ControllerVibration.wRightMotorSpeed = 60000;
@@ -579,7 +569,12 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     }
                 }
 
-                RenderWeirdGradient(&GlobalBackbuffer, XOffset, YOffset);
+                game_offscreen_buffer Buffer = {};
+                Buffer.Memory = GlobalBackbuffer.Memory;
+                Buffer.Width = GlobalBackbuffer.Width;
+                Buffer.Height = GlobalBackbuffer.Height;
+                Buffer.Pitch = GlobalBackbuffer.Pitch;
+                GameUpdateAndRender(&Buffer);
 
                 // NOTE(Kevin): DirectSound output test
                 DWORD PlayCursor;
@@ -594,8 +589,6 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                             (SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample)) 
                         % SoundOutput.SecondaryBufferSize;
                     DWORD BytesToWrite = 0;
-                    //TODO(Kevin): Change this to using a lower latency offset from the playcursor
-                    // when we actually start having sound effects.
                     if (ByteToLock > TargetCursor)
                     {
                         BytesToWrite = (SoundOutput.SecondaryBufferSize - ByteToLock);
@@ -613,16 +606,12 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext,
                     Dimension.Width, Dimension.Height);
 
-                ++XOffset;
-
                 LARGE_INTEGER EndCounter;
                 QueryPerformanceCounter(&EndCounter);
 
                 int64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
                 real32 SecondsElapsed = ((real32)CounterElapsed / (real32)PerfCountFrequency);
                 real32 FPS = ((real32)PerfCountFrequency / (real32)CounterElapsed);
-
-                // printf("%f\n", SecondsElapsed);
 
                 LastCounter = EndCounter;
             }

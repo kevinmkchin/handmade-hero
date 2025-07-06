@@ -26,6 +26,15 @@
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
+inline uint32
+SafeTruncateUInt64(uint64 Value)
+{
+    // TODO(Kevin): Defines for maximum values UInt32Max
+    Assert(Value <= 0xFFFFFFFF);
+    uint32 Result = (uint32)Value;
+    return Result;
+}
+
 // the game is the services to the operating system level to produce the graphics
 // and sound necessary to play the game
 
@@ -38,14 +47,27 @@
 // from the platform layer.
 
 /*
-    TODO(Kevin): Services that the platform layer provides to the game.
+    NOTE(Kevin): Services that the platform layer provides to the game.
 */
+#if HANDMADE_INTERNAL
+/*  IMPORTANT(Kevin):
+    These are NOT for doing anything in the shipping game - they are blocking
+    and the write does not protect against lost data.
+*/
+struct debug_read_file_result
+{
+    uint32 ContentsSize;
+    void *Contents;
+};
+internal debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename);
+internal void DEBUGPlatformFreeFileMemory(void *BitmapMemory);
+internal bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint32 MemorySize, void *Memory);
+#endif
 
 /*
     NOTE(Kevin): Services that the game provides to the platform layer.
     (this may expand in the future - sound on separate thread, etc.)
 */
-
 // FOUR THINGS - timing, controller/keyboard input, bitmap buffer to use, sound buffer to use
 // TODO(Kevin): In the future, rendering specifically will become a three-tiered abstraction!!!
 struct game_offscreen_buffer

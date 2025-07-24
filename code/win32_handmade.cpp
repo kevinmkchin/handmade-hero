@@ -50,6 +50,7 @@ typedef double real64;
 global_variable bool GlobalRunning;
 global_variable win32_offscreen_buffer GlobalBackbuffer;
 global_variable IDirectSoundBuffer *GlobalSecondaryBuffer;
+global_variable int64 GlobalPerfCountFrequency; 
 
 // NOTE(Kevin): This is our support for XInputGetState
 // define function prototype once (so I can change it once here and changes everywhere)
@@ -564,6 +565,22 @@ Win32ProcessPendingMessages(game_controller_input *KeyboardController)
     }
 }
 
+inline LARGE_INTEGER 
+Win32GetWallClock()
+{
+    LARGE_INTEGER Result;
+    QueryPerformanceCounter(&Result);
+    return Result;
+}
+
+inline real32 
+Win32GetSecondsElapsed(LARGE_INTEGER Start, LARGE_INTEGER End)
+{
+    real32 Result = ((real32)(End.QuadPart - Start.QuadPart) / 
+                     (real32)GlobalPerfCountFrequency);
+    return Result;
+}
+
 // Win32 Entry Point: hInstance - handle to the current instance of the application
 // Entered from C Runtime Library
 int CALLBACK 
@@ -571,7 +588,12 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 {
     LARGE_INTEGER PerfCountFrequencyResult;
     QueryPerformanceFrequency(&PerfCountFrequencyResult);
-    int64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
+    GlobalPerfCountFrequency = PerfCountFrequencyResult.QuadPart;
+
+    // NOTE(Kevin): Set the Windows scheduler granularity to 1ms
+    // so that our Sleep() can be more granular.
+    UINT DesiredSchedulerMS = 1;
+    bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
 
     OpenConsole();
     printf("Handmade Hero\n");
@@ -586,6 +608,11 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     WindowClass.hInstance = Instance;
     //WindowClass.hIcon = ;
     WindowClass.lpszClassName = "HandmadeHeroWindowClass";
+
+    // TODO(Kevin): How do we reliably query this on Windows?
+    int MonitorRefreshHz = 60;
+    int GameUpdateHz = MonitorRefreshHz / 2;
+    real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;
 
     if(RegisterClass(&WindowClass))
     {
@@ -644,13 +671,11 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
             if (Samples && GameMemory.PermanentStorage)
             {
-
                 game_input Input[2] = {};
                 game_input *NewInput = &Input[0];
                 game_input *OldInput = &Input[1];
 
-                LARGE_INTEGER LastCounter;
-                QueryPerformanceCounter(&LastCounter);
+                LARGE_INTEGER LastCounter = Win32GetWallClock();
                 while (GlobalRunning)
                 {
                     // TODO(Kevin): Zeroing macro
@@ -807,6 +832,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         SoundIsValid = true;
                     }
 
+                    // TODO(Kevin): Sound is wrong now because we haven't 
+                    // updated it to go w new frame loop
                     game_sound_output_buffer SoundBuffer = {};
                     SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
                     SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
@@ -825,23 +852,51 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         Win32FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer);
                     }
 
+                    LARGE_INTEGER WorkCounter = Win32GetWallClock();
+                    real32 WorkSecondsElapsed = Win32GetSecondsElapsed(LastCounter, WorkCounter);
+
+                    // TODO(Kevin): NOT TESTED YET PROBABLY BUGGY
+                    real32 SecondsElapsedForFrame = WorkSecondsElapsed;
+                    if (SecondsElapsedForFrame < TargetSecondsPerFrame)
+                    {
+                        if (SleepIsGranular)
+                        {
+                            DWORD SleepMS = (DWORD)(1000.0f*(TargetSecondsPerFrame - SecondsElapsedForFrame));
+                            if (SleepMS > 0)
+                            {
+                                Sleep(SleepMS);
+                            }
+                        }
+
+                        while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+                        {
+                            SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock());
+                        }
+                    }
+                    else
+                    {
+                        // TODO(Kevin): MISSED FRAME RATE!
+                        // TODO(Kevin): Logging
+                    }
+
                     win32_window_dimension Dimension = Win32GetWindowDimension(Window);
                     Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext,
                         Dimension.Width, Dimension.Height);
-
-                    LARGE_INTEGER EndCounter;
-                    QueryPerformanceCounter(&EndCounter);
-
-                    int64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
-                    real32 SecondsElapsed = ((real32)CounterElapsed / (real32)PerfCountFrequency);
-                    real32 FPS = ((real32)PerfCountFrequency / (real32)CounterElapsed);
-
-                    LastCounter = EndCounter;
 
                     game_input *Temp = NewInput;
                     NewInput = OldInput;
                     OldInput = Temp;
                     // TODO(Kevin): Should I clear these here?
+
+                    LARGE_INTEGER EndCounter = Win32GetWallClock();                    
+                    real32 MSPerFrame = 1000.f*Win32GetSecondsElapsed(LastCounter, EndCounter);
+                    LastCounter = EndCounter;
+
+                    real64 FPS = 1000.f / MSPerFrame;
+                    char PrintBuffer[256];
+                    sprintf(PrintBuffer, "%.02fms/f, %.02ff/s\n", MSPerFrame, FPS);
+                    // OutputDebugStringA(PrintBuffer);
+                    printf(PrintBuffer);
                 }
             }
             else

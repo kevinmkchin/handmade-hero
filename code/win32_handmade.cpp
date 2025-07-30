@@ -751,33 +751,36 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         }
                     }
 
+                    game_offscreen_buffer BackBuffer = {};
+                    BackBuffer.Memory = GlobalBackbuffer.Memory;
+                    BackBuffer.Width = GlobalBackbuffer.Width;
+                    BackBuffer.Height = GlobalBackbuffer.Height;
+                    BackBuffer.Pitch = GlobalBackbuffer.Pitch;
+                    GameUpdateAndRender(&GameMemory, NewInput, &BackBuffer);
+
                     UINT32 TargetSamplesPerFrame = (UINT32)(SamplesPerSecond / GameUpdateHz);
-                    UINT32 DesiredLatencyInSamples = TargetSamplesPerFrame * FramesOfAudioLatency;
+                    // UINT32 DesiredLatencyInSamples = TargetSamplesPerFrame * FramesOfAudioLatency;
                     // UINT32 DesiredLatencyInSamples = UINT32((real32)TargetSamplesPerFrame * 1.2f);
+                    UINT32 DesiredLatencyInSamples = (UINT32)(SamplesPerSecond / 20); // Samples/50ms
                     UINT32 SamplesLeftToPlay;
                     AudioClient->GetCurrentPadding(&SamplesLeftToPlay);
-                    while (DesiredLatencyInSamples < SamplesLeftToPlay)
+
+                    if (SamplesLeftToPlay < DesiredLatencyInSamples)
                     {
-                        DesiredLatencyInSamples += TargetSamplesPerFrame;
+                        UINT32 AudioFramesToRequest = DesiredLatencyInSamples - SamplesLeftToPlay;
+
+                        game_sound_output_buffer SoundBuffer = {};
+                        SoundBuffer.SamplesPerSecond = SamplesPerSecond;
+                        SoundBuffer.SampleCount = (int)AudioFramesToRequest;
+                        SoundBuffer.Samples = Samples;
+                        GameGetSoundSamples(&GameMemory, &SoundBuffer);
+
+                        // TODO(Kevin): Check results of Get/ReleaseBuffer
+                        BYTE *WasapiSoundBuffer;
+                        AudioRenderClient->GetBuffer(AudioFramesToRequest, &WasapiSoundBuffer);
+                        memcpy(WasapiSoundBuffer, Samples, AudioFramesToRequest * SoundOutputBufferBytesPerFrame);
+                        AudioRenderClient->ReleaseBuffer(AudioFramesToRequest, 0);
                     }
-                    UINT32 AudioFramesToRequest = DesiredLatencyInSamples - SamplesLeftToPlay;
-
-                    game_sound_output_buffer SoundBuffer = {};
-                    SoundBuffer.SamplesPerSecond = SamplesPerSecond;
-                    SoundBuffer.SampleCount = (int)AudioFramesToRequest;
-                    SoundBuffer.Samples = Samples;
-
-                    game_offscreen_buffer Buffer = {};
-                    Buffer.Memory = GlobalBackbuffer.Memory;
-                    Buffer.Width = GlobalBackbuffer.Width;
-                    Buffer.Height = GlobalBackbuffer.Height;
-                    Buffer.Pitch = GlobalBackbuffer.Pitch;
-                    GameUpdateAndRender(&GameMemory, NewInput, &Buffer, &SoundBuffer);
-
-                    BYTE *WasapiSoundBuffer;
-                    AudioRenderClient->GetBuffer(AudioFramesToRequest, &WasapiSoundBuffer);
-                    memcpy(WasapiSoundBuffer, Samples, AudioFramesToRequest * SoundOutputBufferBytesPerFrame);
-                    AudioRenderClient->ReleaseBuffer(AudioFramesToRequest, 0);
 
                     LARGE_INTEGER WorkCounter = Win32GetWallClock();
                     real32 WorkSecondsElapsed = Win32GetSecondsElapsed(LastCounter, WorkCounter);

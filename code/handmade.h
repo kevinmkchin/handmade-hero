@@ -80,9 +80,10 @@ struct game_offscreen_buffer
 
 struct game_sound_output_buffer
 {
+    // 2 channel 16-bit int PCM 
     int SamplesPerSecond;
     int SampleCount;
-    int16 *Samples;
+    void *Samples;
 };
 
 struct game_button_state

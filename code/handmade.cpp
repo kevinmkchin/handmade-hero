@@ -7,7 +7,7 @@ GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
     int16 ToneVolume = 4000;
     int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz; // samples per cycle
 
-    int16 *SampleOut = SoundBuffer->Samples;
+    int16 *SampleOut = (int16 *)SoundBuffer->Samples;
     for (int SampleIndex = 0;
         SampleIndex < SoundBuffer->SampleCount;
         ++SampleIndex)

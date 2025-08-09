@@ -131,34 +131,41 @@ DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
     return Result;
 }
 
-struct win32_game_code
+inline FILETIME
+Win32GetLastWriteTime(char *Filepath)
 {
-    HMODULE GameCodeDLL;
-    game_update_and_render *UpdateAndRender;
-    game_get_sound_samples *GetSoundSamples;
+    FILETIME LastWriteTime = {};
 
-    bool32 IsValid;
-};
+    HANDLE FileHandle = CreateFileA(Filepath, GENERIC_READ, 
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (FileHandle != INVALID_HANDLE_VALUE)
+    {
+        GetFileTime(FileHandle, NULL, NULL, &LastWriteTime);
+        CloseHandle(FileHandle);
+    }
+
+    return LastWriteTime;
+}
+
 internal win32_game_code
-Win32LoadGameCode()
+Win32LoadGameCode(char *SourceDLLName, char *TempDLLName)
 {
     win32_game_code Result = {};
 
-    // TODO(Kevin): Get proper path here
-    // TODO(Kevin): Automatic determination of when updates are necessary
-
-    Assert(CopyFile(
-        "C:/dev/handmade/build/handmade.dll", 
-        "C:/dev/handmade/build/handmade_temp.dll", FALSE));
-    Result.GameCodeDLL = LoadLibraryA("handmade_temp.dll");
-    if (Result.GameCodeDLL)
+    if (CopyFile(SourceDLLName, TempDLLName, FALSE))
     {
-        Result.UpdateAndRender = (game_update_and_render *)
-            GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
-        Result.GetSoundSamples = (game_get_sound_samples *)
-            GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
+        Result.GameCodeDLL = LoadLibraryA(TempDLLName);
+        if (Result.GameCodeDLL)
+        {
+            Result.DLLLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
+            Result.UpdateAndRender = (game_update_and_render *)
+                GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
+            Result.GetSoundSamples = (game_get_sound_samples *)
+                GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
 
-        Result.IsValid  = (Result.UpdateAndRender && Result.GetSoundSamples);
+            Result.IsValid  = (Result.UpdateAndRender && Result.GetSoundSamples);
+        }   
     }
 
     if (!Result.IsValid)
@@ -458,6 +465,22 @@ Win32GetSecondsElapsed(LARGE_INTEGER Start, LARGE_INTEGER End)
     return Result;
 }
 
+internal void
+CatStrings(size_t SourceACount, char *SourceA,
+           size_t SourceBCount, char *SourceB,
+           size_t DestCount, char *Dest)
+{
+    for (size_t Index = 0; Index < SourceACount; ++Index)
+    {
+        *Dest++ = *SourceA++;
+    }
+    for (size_t Index = 0; Index < SourceBCount; ++Index)
+    {
+        *Dest++ = *SourceB++;
+    }
+    *Dest++ = 0;
+}
+
 // Win32 Entry Point: hInstance - handle to the current instance of the application
 // Entered from C Runtime Library
 int CALLBACK 
@@ -465,6 +488,29 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 {
     // NOTE(Kevin): https://learn.microsoft.com/en-us/windows/win32/learnwin32/initializing-the-com-library
     Assert(SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)));
+
+    char EXEFileName[MAX_PATH];
+    DWORD SizeOfFilePath = GetModuleFileNameA(0, EXEFileName, sizeof(EXEFileName));
+    char *OnePastLastSlash = EXEFileName;
+    for (char *Scan = EXEFileName; *Scan; ++Scan)
+    {
+        if (*Scan == '\\')
+        {
+            OnePastLastSlash = Scan + 1;
+        }
+    }
+
+    char SourceGameCodeDLLFileName[] = "handmade.dll";
+    char SourceGameCodeDLLFullPath[MAX_PATH];
+    CatStrings(OnePastLastSlash - EXEFileName, EXEFileName,
+               sizeof(SourceGameCodeDLLFileName) - 1, SourceGameCodeDLLFileName,
+               sizeof(SourceGameCodeDLLFullPath) - 1, SourceGameCodeDLLFullPath);
+
+    char TempGameCodeDLLFileName[] = "handmade_temp.dll";
+    char TempGameCodeDLLFullPath[MAX_PATH];
+    CatStrings(OnePastLastSlash - EXEFileName, EXEFileName,
+               sizeof(TempGameCodeDLLFileName) - 1, TempGameCodeDLLFileName,
+               sizeof(TempGameCodeDLLFullPath) - 1, TempGameCodeDLLFullPath);
 
     LARGE_INTEGER PerfCountFrequencyResult;
     QueryPerformanceFrequency(&PerfCountFrequencyResult);
@@ -491,7 +537,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
 #define FramesOfAudioLatency 2
 #define MonitorRefreshHz 60
-#define GameUpdateHz (MonitorRefreshHz / 1)
+#define GameUpdateHz (MonitorRefreshHz / 2)
     real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;
 
     if(RegisterClass(&WindowClass))
@@ -607,16 +653,15 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 int DebugTimeMarkersIndex = 0;
                 win32_debug_time_marker DebugTimeMarkers[GameUpdateHz/2] = {0};
 
-                win32_game_code Game = Win32LoadGameCode();
-                uint32 LoadCounter = 0;
+                win32_game_code Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
                 while (GlobalRunning)
                 {
-                    if (LoadCounter++ > 120)
+                    FILETIME NewDLLWriteTime =  Win32GetLastWriteTime(SourceGameCodeDLLFullPath);
+                    if (CompareFileTime(&NewDLLWriteTime, &Game.DLLLastWriteTime) > 0)
                     {
                         Win32UnloadGameCode(&Game);
-                        Game = Win32LoadGameCode();
-                        LoadCounter = 0;
+                        Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
                     }
 
                     // TODO(Kevin): Zeroing macro
@@ -802,6 +847,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     {
                         // TODO(Kevin): MISSED FRAME RATE!
                         // TODO(Kevin): Logging
+                        printf("Missed frame rate!\n");
                     }
 
                     LARGE_INTEGER EndCounter = Win32GetWallClock();                    

@@ -208,6 +208,7 @@ Win32LoadXInput()
     }
 }
 
+#if 0
 internal void
 OpenConsole()
 {
@@ -217,6 +218,7 @@ OpenConsole()
     freopen_s(&fp, "CONOUT$", "w", stderr);  // Redirect stderr (optional)
     freopen_s(&fp, "CONIN$", "r", stdin);    // Redirect stdin (optional)
 }
+#endif
 
 internal win32_window_dimension
 Win32GetWindowDimension(HWND Window)
@@ -625,12 +627,12 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     }
     bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
 
-    OpenConsole();
-    printf("Handmade Hero\n");
+    // OpenConsole();
+    // printf("Handmade Hero\n");
 
     Win32LoadXInput();
 
-    Win32ResizeDIBSection(&GlobalBackbuffer, 800, 600);
+    Win32ResizeDIBSection(&GlobalBackbuffer, 1280, 720);
 
     WNDCLASSA WindowClass = {};
     WindowClass.style = CS_HREDRAW|CS_VREDRAW;
@@ -960,7 +962,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     {
                         // TODO(Kevin): MISSED FRAME RATE!
                         // TODO(Kevin): Logging what took so long
-                        printf("Missed frame rate!\n");
+                        // printf("Missed frame rate!\n");
                     }
 
                     LARGE_INTEGER EndCounter = Win32GetWallClock();                    
@@ -982,7 +984,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     char PrintBuffer[256];
                     sprintf(PrintBuffer, "%.02fms/f, %.02ff/s\n", MSPerFrame, FPS);
                     // OutputDebugStringA(PrintBuffer);
-                    printf(PrintBuffer);
+                    // printf(PrintBuffer);
                 }
 
                 AudioRenderClient->Release();

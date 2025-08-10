@@ -12,3 +12,7 @@ del *.pdb > NUL 2> NUL
 cl %CommonCompilerFlags% -LD ..\code\handmade.cpp -Fmhandmade.map /link -incremental:no -PDB:handmade_%ts%.pdb -EXPORT:GameUpdateAndRender -EXPORT:GameGetSoundSamples
 cl %CommonCompilerFlags% ..\code\win32_handmade.cpp -Fmwin32_handmade.map /link %CommonLinkerFlags%
 popd
+
+
+rem when PDB name does not match binary name, Superluminal is not able to find debug info
+

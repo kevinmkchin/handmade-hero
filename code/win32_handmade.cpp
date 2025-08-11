@@ -140,7 +140,7 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile)
                 else
                 {
                     // TODO(Kevin): Logging
-                    DEBUGPlatformFreeFileMemory(Result.Contents);
+                    DEBUGPlatformFreeFileMemory(Thread, Result.Contents);
                     Result.Contents = 0;
                 }
             }
@@ -393,10 +393,11 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 internal void
 Win32ProcessKeyboardMessage(game_button_state *NewState, bool32 IsDown)
 {
-    // TODO(Kevin): This Assert can be true sometimes when switching apps etc!!!
-    Assert(NewState->EndedDown != IsDown);
-    NewState->EndedDown = IsDown;
-    ++NewState->HalfTransitionCount;
+    if (NewState->EndedDown != IsDown)
+    {
+        NewState->EndedDown = IsDown;
+        ++NewState->HalfTransitionCount;   
+    }
 }
 
 internal void
@@ -515,6 +516,11 @@ Win32ProcessPendingMessages(win32_state *State, game_controller_input *KeyboardC
             case WM_QUIT:
             {
                 GlobalRunning = false;
+            } break;
+
+            case WM_MOUSEWHEEL:
+            {
+
             } break;
 
             case WM_SYSKEYDOWN:
@@ -675,11 +681,6 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     //WindowClass.hIcon = ;
     WindowClass.lpszClassName = "HandmadeHeroWindowClass";
 
-#define FramesOfAudioLatency 2
-#define MonitorRefreshHz 60
-#define GameUpdateHz (MonitorRefreshHz / 2)
-    real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;
-
     if(RegisterClass(&WindowClass))
     {
         HWND Window = CreateWindowExA(
@@ -698,6 +699,17 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             NULL);      // Additional application data
         if (Window)
         {
+            int MonitorRefreshHz = 60;
+            HDC RefreshDC = GetDC(Window);
+            int Win32RefreshRate = GetDeviceCaps(RefreshDC, VREFRESH);
+            ReleaseDC(Window, RefreshDC);
+            if (Win32RefreshRate > 1)
+            {
+                MonitorRefreshHz = Win32RefreshRate;
+            }
+            real32 GameUpdateHz = (MonitorRefreshHz / 2.f);
+            real32 TargetSecondsPerFrame = 1.0f / GameUpdateHz;
+
             IMMDeviceEnumerator *DeviceEnumerator = NULL;
             IMMDevice *DefaultAudioDevice = NULL;
             IAudioClient *AudioClient = NULL;
@@ -787,9 +799,6 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
                 LARGE_INTEGER LastCounter = Win32GetWallClock();
 
-                int DebugTimeMarkersIndex = 0;
-                win32_debug_time_marker DebugTimeMarkers[GameUpdateHz/2] = {0};
-
                 win32_game_code Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
                 while (GlobalRunning)
@@ -815,6 +824,25 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     }
 
                     Win32ProcessPendingMessages(&Win32State, NewKeyboardController);
+
+                    POINT MouseP;
+                    // TODO(Kevin): Handle failure case
+                    GetCursorPos(&MouseP);
+                    // TODO(Kevin): Handle failure case
+                    ScreenToClient(Window, &MouseP);
+                    NewInput->MouseX = MouseP.x;
+                    NewInput->MouseY = MouseP.y;
+                    NewInput->MouseZ = 0; // TODO(Kevin): Support mousewheel
+                    Win32ProcessKeyboardMessage(&NewInput->MouseButtons[0],
+                        GetKeyState(VK_LBUTTON) & (1 << 15));
+                    Win32ProcessKeyboardMessage(&NewInput->MouseButtons[1],
+                        GetKeyState(VK_RBUTTON) & (1 << 15));
+                    Win32ProcessKeyboardMessage(&NewInput->MouseButtons[2],
+                        GetKeyState(VK_MBUTTON) & (1 << 15));
+                    Win32ProcessKeyboardMessage(&NewInput->MouseButtons[3],
+                        GetKeyState(VK_XBUTTON1) & (1 << 15));
+                    Win32ProcessKeyboardMessage(&NewInput->MouseButtons[4],
+                        GetKeyState(VK_XBUTTON2) & (1 << 15));
 
                     // TODO(Kevin): Should we poll this more frequently?
                     // TODO(Kevin): apparently XInputGetState can stall for several ms if the
@@ -926,6 +954,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         }
                     }
 
+                    thread_context Thread = {};
+
                     game_offscreen_buffer BackBuffer = {};
                     BackBuffer.Memory = GlobalBackbuffer.Memory;
                     BackBuffer.Width = GlobalBackbuffer.Width;
@@ -945,13 +975,13 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
                     if (Game.UpdateAndRender)
                     {
-                        Game.UpdateAndRender(&GameMemory, NewInput, &BackBuffer);
+                        Game.UpdateAndRender(&Thread, &GameMemory, NewInput, &BackBuffer);
                     }
 
                     // TODO(Kevin): Put audio sampling on a separate dedicated thread
                     // - runs independently of game thread
                     // - more frequent updates (lower latency)
-                    UINT32 TargetSamplesPerFrame = (UINT32)(SamplesPerSecond / GameUpdateHz);
+                    UINT32 TargetSamplesPerFrame = (UINT32)((real32)SamplesPerSecond / GameUpdateHz);
                     // UINT32 DesiredLatencyInSamples = TargetSamplesPerFrame * FramesOfAudioLatency;
                     // UINT32 DesiredLatencyInSamples = UINT32((real32)TargetSamplesPerFrame * 1.2f);
                     UINT32 DesiredLatencyInSamples = (UINT32)(SamplesPerSecond / 20); // Samples/50ms
@@ -969,7 +999,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
                         if (Game.GetSoundSamples)
                         {
-                            Game.GetSoundSamples(&GameMemory, &SoundBuffer);
+                            Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
                         }
 
                         // TODO(Kevin): Check results of Get/ReleaseBuffer

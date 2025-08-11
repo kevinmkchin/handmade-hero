@@ -11,7 +11,7 @@ GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffer, in
         SampleIndex < SoundBuffer->SampleCount;
         ++SampleIndex)
     {
-#if 0
+#if 1
         real32 SineValue = sinf(GameState->tSine);
         int16 SampleValue = (int16)(SineValue * ToneVolume);
 #else
@@ -94,11 +94,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
 #if 0
         char *Filename = __FILE__;
-        debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Filename);
+        debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Thread, Filename);
         if (File.Contents)
         {
-            Memory->DEBUGPlatformWriteEntireFile("test.out", File.ContentsSize, File.Contents);
-            Memory->DEBUGPlatformFreeFileMemory(File.Contents);
+            Memory->DEBUGPlatformWriteEntireFile(Thread, "test.out", File.ContentsSize, File.Contents);
+            Memory->DEBUGPlatformFreeFileMemory(Thread, File.Contents);
         }
 #endif
         GameState->ToneHz = 256;
@@ -177,6 +177,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     RenderWeirdGradient(Buffer, GameState->BlueOffset, GameState->GreenOffset);
     RenderPlayer(Buffer, GameState->PlayerX, GameState->PlayerY);
+
+    RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
+
 }
 
 

@@ -1,6 +1,6 @@
 @echo off
 
-set CommonCompilerFlags=-MT -nologo -WX -W4 -wd4201 -wd4100 -wd4189 -D_CRT_SECURE_NO_WARNINGS -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1 -FC -Z7
+set CommonCompilerFlags=-MTd -nologo -WX -W4 -wd4201 -wd4100 -wd4189 -D_CRT_SECURE_NO_WARNINGS -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1 -FC -Z7
 set CommonLinkerFlags=-incremental:no -opt:ref -subsystem:windows user32.lib gdi32.lib winmm.lib
 
 set ts=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%

@@ -92,15 +92,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     game_state *GameState = (game_state *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
+#if 0
         char *Filename = __FILE__;
-
         debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Filename);
         if (File.Contents)
         {
             Memory->DEBUGPlatformWriteEntireFile("test.out", File.ContentsSize, File.Contents);
             Memory->DEBUGPlatformFreeFileMemory(File.Contents);
         }
-
+#endif
         GameState->ToneHz = 256;
         GameState->tSine = 0.f;
 

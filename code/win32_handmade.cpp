@@ -353,14 +353,8 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 
         case WM_ACTIVATEAPP:
         {
-            if (WParam == TRUE)
-            {
-                // focused
-            }
-            else
-            {
-                // not focused
-            }
+            // NOTE(Kevin): Queue nonqueued message to handle later.
+            PostMessageA(Window, Message, WParam, LParam);
         } break;
 
         case WM_SYSKEYDOWN:
@@ -398,6 +392,25 @@ Win32ProcessKeyboardMessage(game_button_state *NewState, bool32 IsDown)
         NewState->EndedDown = IsDown;
         ++NewState->HalfTransitionCount;   
     }
+}
+
+internal void
+Win32CopyKeyboardEndedDownStates(game_controller_input *Dest, 
+                                 game_controller_input *Src)
+{
+    for (int ButtonIndex = 0;
+        ButtonIndex < ArrayCount(Dest->Buttons);
+        ++ButtonIndex)
+    {
+        Dest->Buttons[ButtonIndex].EndedDown = Src->Buttons[ButtonIndex].EndedDown;
+    }
+}
+
+internal void
+Win32ClearKeyboardEndedDownStates(game_controller_input *KeyboardController)
+{
+    game_controller_input BlankButtonState = {};
+    Win32CopyKeyboardEndedDownStates(KeyboardController, &BlankButtonState);
 }
 
 internal void
@@ -508,6 +521,9 @@ Win32PlayBackInput(win32_state *State, game_input *NewInput)
 internal void 
 Win32ProcessPendingMessages(win32_state *State, game_controller_input *KeyboardController)
 {
+    // NOTE(Kevin): Nonqueued messages are sent immediately to the main 
+    // window callback and bypass the message queue.
+
     MSG Message;
     while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
     {
@@ -516,6 +532,18 @@ Win32ProcessPendingMessages(win32_state *State, game_controller_input *KeyboardC
             case WM_QUIT:
             {
                 GlobalRunning = false;
+            } break;
+
+            case WM_ACTIVATEAPP:
+            {
+                if (Message.wParam == TRUE)
+                {
+
+                }
+                else
+                {
+                    Win32ClearKeyboardEndedDownStates(KeyboardController);
+                }
             } break;
 
             case WM_MOUSEWHEEL:
@@ -586,14 +614,22 @@ Win32ProcessPendingMessages(win32_state *State, game_controller_input *KeyboardC
                     {
                         if (IsDown)
                         {
-                            if (State->InputRecordingIndex == 0)
-                            {
-                                Win32BeginRecordingInput(State, 1);
+                            if (State->InputPlayingIndex == 0)
+                            {                                
+                                if (State->InputRecordingIndex == 0)
+                                {
+                                    Win32BeginRecordingInput(State, 1);
+                                }
+                                else
+                                {
+                                    Win32EndRecordingInput(State);
+                                    Win32BeginInputPlayBack(State, 1);
+                                }
                             }
                             else
                             {
-                                Win32EndRecordingInput(State);
-                                Win32BeginInputPlayBack(State, 1);
+                                Win32EndInputPlayBack(State);
+                                Win32ClearKeyboardEndedDownStates(KeyboardController);
                             }
                         }
                     }
@@ -815,13 +851,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     game_controller_input *NewKeyboardController = GetController(NewInput, 0);
                     *NewKeyboardController = {};
                     NewKeyboardController->IsConnected = true;
-                    for (int ButtonIndex = 0;
-                         ButtonIndex < ArrayCount(NewKeyboardController->Buttons);
-                         ++ButtonIndex)
-                    {
-                        NewKeyboardController->Buttons[ButtonIndex].EndedDown =
-                            OldKeyboardController->Buttons[ButtonIndex].EndedDown;
-                    }
+                    Win32CopyKeyboardEndedDownStates(NewKeyboardController, 
+                                                     OldKeyboardController);
 
                     Win32ProcessPendingMessages(&Win32State, NewKeyboardController);
 
@@ -1042,6 +1073,34 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     LastCounter = EndCounter;
 
                     win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+#if HANDMADE_INTERNAL
+                    if (Win32State.InputRecordingIndex > 0)
+                    {
+                        for (int X = 10; X < 20; ++X)
+                        {
+                            for (int Y = 10; Y < 20; ++Y)
+                            {
+                                uint32 *Pixel = (uint32 *)((uint8 *)GlobalBackbuffer.Memory +
+                                    X*GlobalBackbuffer.BytesPerPixel +
+                                    Y*GlobalBackbuffer.Pitch);
+                                *Pixel = 0xFFFF0000;
+                            }
+                        }
+                    }
+                    if (Win32State.InputPlayingIndex > 0)
+                    {
+                        for (int X = 20; X < 30; ++X)
+                        {
+                            for (int Y = 10; Y < 20; ++Y)
+                            {
+                                uint32 *Pixel = (uint32 *)((uint8 *)GlobalBackbuffer.Memory +
+                                    X*GlobalBackbuffer.BytesPerPixel +
+                                    Y*GlobalBackbuffer.Pitch);
+                                *Pixel = 0xFF00FF00;
+                            }
+                        }
+                    }
+#endif
                     HDC DeviceContext = GetDC(Window);
                     Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext,
                                                Dimension.Width, Dimension.Height);
@@ -1050,7 +1109,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     game_input *Temp = NewInput;
                     NewInput = OldInput;
                     OldInput = Temp;
-                    // TODO(Kevin): Should I clear these here?
+                    *NewInput = {};
 
                     real64 FPS = 1000.f / MSPerFrame;
                     char PrintBuffer[256];

@@ -832,7 +832,6 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 game_input Input[2] = {};
                 game_input *NewInput = &Input[0];
                 game_input *OldInput = &Input[1];
-                NewInput->SecondsToAdvanceOverUpdate = TargetSecondsPerFrame;
 
                 LARGE_INTEGER LastCounter = Win32GetWallClock();
 
@@ -846,6 +845,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         Win32UnloadGameCode(&Game);
                         Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
                     }
+
+                    NewInput->dtForFrame = TargetSecondsPerFrame;
 
                     // TODO(Kevin): Zeroing macro
                     game_controller_input *OldKeyboardController = GetController(OldInput, 0);

@@ -45,7 +45,7 @@ internal void
 DrawRectangle(game_offscreen_buffer *Buffer,
               real32 RealMinX, real32 RealMinY, 
               real32 RealMaxX, real32 RealMaxY,
-              uint32 Color)
+              real32 R, real32 G, real32 B)
 {
     // TODO(Kevin): Floating point color tomorrow
     // Rounds parameters to integers and fills up to but not including rnd(MaxX), rnd(MaxY)
@@ -64,7 +64,10 @@ DrawRectangle(game_offscreen_buffer *Buffer,
     if (MaxY > Buffer->Height)
         MaxY = Buffer->Height;
 
-    uint8 *EndOfBuffer = (uint8 *)Buffer->Memory + Buffer->Pitch*Buffer->Height;
+    uint32 Color = 0xFF000000 |
+                   ((uint32)RoundReal32ToInt32(R * 255.0f)) << 16 |
+                   ((uint32)RoundReal32ToInt32(G * 255.0f)) << 8 |
+                   ((uint32)RoundReal32ToInt32(B * 255.0f)) << 0;
 
     uint8 *Row = ((uint8 *)Buffer->Memory +
                   MinX*Buffer->BytesPerPixel +
@@ -90,6 +93,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     game_state *GameState = (game_state *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
+        GameState->PlayerX = 100.f;
+        GameState->PlayerY = 100.f;
+
         Memory->IsInitialized = true;
     }
 
@@ -105,11 +111,81 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         else
         {
             // NOTE(Kevin): Use digital movement tuning
+            real32 dPlayerX = 0.0f;
+            real32 dPlayerY = 0.0f;
+
+            if (Controller->MoveUp.EndedDown)
+            {
+                dPlayerY = -1.0f;
+            }
+            if (Controller->MoveDown.EndedDown)
+            {
+                dPlayerY = 1.0f;
+            }
+            if (Controller->MoveLeft.EndedDown)
+            {
+                dPlayerX = -1.0f;
+            }
+            if (Controller->MoveRight.EndedDown)
+            {
+                dPlayerX = 1.0f;
+            }
+            dPlayerX *= 64.0f;
+            dPlayerY *= 64.0f; 
+
+            GameState->PlayerX += Input->dtForFrame*dPlayerX;
+            GameState->PlayerY += Input->dtForFrame*dPlayerY;
         }
     }
 
-    DrawRectangle(Buffer, 0.f, 0.f, (real32)Buffer->Width, (real32)Buffer->Height, 0xFFFF00FF);
-    DrawRectangle(Buffer, 10.f, 10.f, 30.f, 30.f, 0xFF00FFFF);
+    uint32 TileMap[9][17] =
+    {
+        { 1, 1, 1, 1,  1, 1, 1, 1,  0,  1, 1, 1, 1,  1, 1, 1, 1 },
+        { 1, 1, 0, 0,  0, 1, 0, 0,  0,  0, 0, 0, 0,  1, 0, 0, 1 },
+        { 1, 1, 0, 0,  0, 0, 0, 0,  0,  0, 0, 0, 0,  0, 1, 0, 1 },
+        { 1, 0, 0, 0,  0, 0, 0, 0,  1,  0, 0, 0, 0,  0, 0, 0, 1 },
+        { 0, 0, 1, 0,  0, 1, 0, 0,  1,  0, 0, 0, 0,  0, 1, 0, 0 },
+        { 1, 1, 1, 0,  0, 1, 0, 0,  1,  0, 0, 0, 0,  1, 0, 0, 1 },
+        { 1, 0, 0, 0,  0, 1, 0, 0,  0,  0, 0, 0, 1,  0, 0, 0, 1 },
+        { 1, 1, 1, 1,  1, 0, 0, 0,  0,  0, 0, 0, 0,  1, 0, 0, 1 },
+        { 1, 1, 1, 1,  1, 1, 1, 1,  0,  1, 1, 1, 1,  1, 1, 1, 1 },
+    };
+
+    DrawRectangle(Buffer, 0.f, 0.f, (real32)Buffer->Width, (real32)Buffer->Height,
+                  1.f, 0.f, 1.f);
+
+    real32 UpperLeftX = -30;
+    real32 UpperLeftY = 0;
+    real32 TileWidth = 60;
+    real32 TileHeight = 60;
+    for (int Row = 0; Row < 9; ++Row)
+    {
+        for (int Column = 0; Column < 17; ++Column)
+        {
+            uint32 TileID = TileMap[Row][Column];
+            real32 Gray = 0.5f;
+            if (TileID == 1)
+            {
+                Gray = 1.0f;
+            }
+
+            real32 MinX = UpperLeftX + ((real32)Column) * TileWidth;
+            real32 MinY = UpperLeftY + ((real32)Row) * TileHeight;
+            real32 MaxX = MinX + TileWidth;
+            real32 MaxY = MinY + TileHeight;
+            DrawRectangle(Buffer, MinX, MinY, MaxX, MaxY, Gray, Gray, Gray);
+        }
+    }
+
+    real32 PlayerR = 1.0f;
+    real32 PlayerG = 1.0f;
+    real32 PlayerB = 0.0f;
+    real32 PlayerWidth = TileWidth * 0.75f;
+    real32 PlayerHeight = TileHeight;
+    real32 PlayerLeft = GameState->PlayerX - (PlayerWidth / 2.f);
+    real32 PlayerTop = GameState->PlayerY - PlayerHeight;
+    DrawRectangle(Buffer, PlayerLeft, PlayerTop, PlayerLeft + PlayerWidth, PlayerTop + PlayerHeight, 
+                  PlayerR, PlayerG, PlayerB);
 }
 
 extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)

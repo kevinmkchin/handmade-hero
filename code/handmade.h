@@ -203,27 +203,29 @@ typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
 struct canonical_position
 {
+    /* TODO(Kevin):
+        Take the tile map x and y
+        and the tile x and y
+
+        and pack them into single 32 bit values for x and y where there is some low
+        bits for the tile index and the high bits are the tile "page"
+
+        we can eliminate the need for floor
+    */
+#if 1
     int32 TileMapX;
     int32 TileMapY;
 
     int32 TileX;
     int32 TileY;
+#else
+    uint32 TileX;
+    uint32 TileY;
+#endif
 
-    // NOTE(Kevin): This is tile relative X and Y
-    // TODO(casey): These are still in pixels...
+    // TODO(Kevin): Should these be from the center of the tile?
     real32 TileRelX;
     real32 TileRelY;
-};
-
-// TODO(Kevin): Is this ever necessary?
-struct raw_position
-{
-    int32 TileMapX;
-    int32 TileMapY;
-
-    // NOTE(Kevin): This is tile-map relative X and Y
-    real32 X;
-    real32 Y;
 };
 
 struct tile_map
@@ -235,6 +237,7 @@ struct world
 {
     real32 TileSideInMeters;
     int32 TileSideInPixels;
+    real32 PixelsPerMeter;
 
     int32 CountX;
     int32 CountY;
@@ -251,11 +254,6 @@ struct world
 
 struct game_state
 {
-// TODO(Kevin): Player state should be canonical position now?
-    int32 PlayerTileMapX;
-    int32 PlayerTileMapY;
-
-    real32 PlayerX;
-    real32 PlayerY;
+    canonical_position PlayerP;
 };
 

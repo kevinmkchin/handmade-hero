@@ -828,6 +828,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             GameMemory.DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
 
             // TODO(Kevin): Use MEM_LARGE_PAGES and call AdjustTokenPrivileges
+            // TODO(Kevin): TransientStorage needs to be broken up into game
+            // transient and cache transient, and only the former needs to be
+            // saved for state playback.
             Win32State.GameMemoryTotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
             Win32State.GameMemoryBlock = VirtualAlloc(BaseAddress, (size_t)Win32State.GameMemoryTotalSize, 
                                                       MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);

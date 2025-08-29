@@ -233,13 +233,14 @@ struct tile_map
 
 struct world
 {
+    real32 TileSideInMeters;
+    int32 TileSideInPixels;
+
     int32 CountX;
     int32 CountY;
 
     real32 UpperLeftX;
     real32 UpperLeftY;
-    real32 TileWidth;
-    real32 TileHeight;
 
     // TODO(Kevin): beginner's sparseness
     int32 TileMapCountX;

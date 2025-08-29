@@ -9,6 +9,7 @@ set ts=%ts: =0%%time:~3,2%%time:~6,2%
 IF NOT EXIST build mkdir build
 pushd build
 del *.pdb > NUL 2> NUL
+REM Optimization switches /O2 /Oi /fp:fast
 cl %CommonCompilerFlags% -LD ..\code\handmade.cpp -Fmhandmade.map /link -incremental:no -PDB:handmade_%ts%.pdb -EXPORT:GameUpdateAndRender -EXPORT:GameGetSoundSamples
 cl %CommonCompilerFlags% ..\code\win32_handmade.cpp -Fmwin32_handmade.map /link %CommonLinkerFlags%
 popd

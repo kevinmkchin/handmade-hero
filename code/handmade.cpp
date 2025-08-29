@@ -1,4 +1,5 @@
 #include "handmade.h"
+#include "handmade_intrinsics.h"
 
 internal void
 GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffer, int ToneHz)
@@ -27,34 +28,6 @@ GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffer, in
         }
 #endif
     }
-}
-
-inline int32
-RoundReal32ToInt32(real32 Real32)
-{
-    // TODO(Kevin): Intrinsic?
-    if (Real32 > 0.f)
-        return (int32)(Real32 + 0.5f);
-    else if (Real32 < 0.f)
-        return (int32)(Real32 - 0.5f);
-    else
-        return 0;
-}
-
-// TODO(Kevin): how to implement these math functions!!!
-#include "math.h"
-inline int32
-FloorReal32ToInt32(real32 Real32)
-{
-    int32 Result = (int32)floorf(Real32);
-    return Result;
-}
-
-inline int32
-TruncateReal32ToInt32(real32 Real32)
-{
-    int32 Result = (int32)Real32;
-    return Result;
 }
 
 internal void
@@ -151,16 +124,16 @@ GetCanonicalPosition(world *World, raw_position Pos)
 
     real32 X = Pos.X - World->UpperLeftX;
     real32 Y = Pos.Y - World->UpperLeftY;
-    Result.TileX = FloorReal32ToInt32(X / World->TileWidth);
-    Result.TileY = FloorReal32ToInt32(Y / World->TileHeight);
+    Result.TileX = FloorReal32ToInt32(X / World->TileSideInPixels);
+    Result.TileY = FloorReal32ToInt32(Y / World->TileSideInPixels);
 
-    Result.TileRelX = X - Result.TileX * World->TileWidth;
-    Result.TileRelY = Y - Result.TileY * World->TileHeight;
+    Result.TileRelX = X - Result.TileX * World->TileSideInPixels;
+    Result.TileRelY = Y - Result.TileY * World->TileSideInPixels;
 
     Assert(Result.TileRelX >= 0);
     Assert(Result.TileRelY >= 0);
-    Assert(Result.TileRelX < World->TileWidth);
-    Assert(Result.TileRelY < World->TileHeight);
+    Assert(Result.TileRelX < World->TileSideInPixels);
+    Assert(Result.TileRelY < World->TileSideInPixels);
 
     if (Result.TileX < 0)
     {
@@ -273,13 +246,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     World.TileMapCountY = 2;
     World.CountX = TILE_MAP_COUNT_X;
     World.CountY = TILE_MAP_COUNT_Y;
-    World.UpperLeftX = -30;
-    World.UpperLeftY = 0;
-    World.TileWidth = 60;
-    World.TileHeight = 60;
 
-    real32 PlayerWidth = 0.75f * World.TileWidth;
-    real32 PlayerHeight = World.TileHeight;
+    // TODO(Kevin): Begin using tile side in meters
+    World.TileSideInMeters = 1.4f;
+    World.TileSideInPixels = 60;
+
+    World.UpperLeftX = -(real32)World.TileSideInPixels/2;
+    World.UpperLeftY = 0;
+    
+    real32 PlayerWidth = 0.75f*World.TileSideInPixels;
+    real32 PlayerHeight = (real32)World.TileSideInPixels;
 
     World.TileMaps = (tile_map *)TileMaps;
 
@@ -353,8 +329,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 GameState->PlayerTileMapX = CanPos.TileMapX;
                 GameState->PlayerTileMapY = CanPos.TileMapY;
 
-                GameState->PlayerX = World.UpperLeftX + World.TileWidth * CanPos.TileX + CanPos.TileRelX;
-                GameState->PlayerY = World.UpperLeftY + World.TileHeight * CanPos.TileY + CanPos.TileRelY;
+                GameState->PlayerX = World.UpperLeftX + World.TileSideInPixels * CanPos.TileX + CanPos.TileRelX;
+                GameState->PlayerY = World.UpperLeftY + World.TileSideInPixels * CanPos.TileY + CanPos.TileRelY;
             }
         }
     }
@@ -373,10 +349,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 Gray = 1.0f;
             }
 
-            real32 MinX = World.UpperLeftX + ((real32)Column) * World.TileWidth;
-            real32 MinY = World.UpperLeftY + ((real32)Row) * World.TileHeight;
-            real32 MaxX = MinX + World.TileWidth;
-            real32 MaxY = MinY + World.TileHeight;
+            real32 MinX = World.UpperLeftX + ((real32)Column) * World.TileSideInPixels;
+            real32 MinY = World.UpperLeftY + ((real32)Row) * World.TileSideInPixels;
+            real32 MaxX = MinX + World.TileSideInPixels;
+            real32 MaxY = MinY + World.TileSideInPixels;
             DrawRectangle(Buffer, MinX, MinY, MaxX, MaxY, Gray, Gray, Gray);
         }
     }

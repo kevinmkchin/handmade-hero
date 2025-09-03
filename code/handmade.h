@@ -201,7 +201,16 @@ typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 // platform layer does not need to know about these:
 //
 
-struct canonical_position
+struct tile_chunk_position
+{
+    uint32 TileChunkX;
+    uint32 TileChunkY;
+
+    uint32 RelTileX;
+    uint32 RelTileY;
+};
+
+struct world_position
 {
     /* TODO(Kevin):
         Take the tile map x and y
@@ -212,48 +221,39 @@ struct canonical_position
 
         we can eliminate the need for floor
     */
-#if 1
-    int32 TileMapX;
-    int32 TileMapY;
-
-    int32 TileX;
-    int32 TileY;
-#else
-    uint32 TileX;
-    uint32 TileY;
-#endif
+    uint32 AbsTileX;
+    uint32 AbsTileY;
 
     // TODO(Kevin): Should these be from the center of the tile?
+    // TODO(Kevin): Rename to offset X and Y
     real32 TileRelX;
     real32 TileRelY;
 };
 
-struct tile_map
+struct tile_chunk
 {
     uint32 *Tiles;
 };
 
 struct world
 {
+    uint32 ChunkShift;
+    uint32 ChunkMask;
+    uint32 ChunkDim;
+
     real32 TileSideInMeters;
     int32 TileSideInPixels;
     real32 PixelsPerMeter;
 
-    int32 CountX;
-    int32 CountY;
-
-    real32 UpperLeftX;
-    real32 UpperLeftY;
-
     // TODO(Kevin): beginner's sparseness
-    int32 TileMapCountX;
-    int32 TileMapCountY;
+    int32 TileChunkCountX;
+    int32 TileChunkCountY;
 
-    tile_map *TileMaps;
+    tile_chunk *TileChunks;
 };
 
 struct game_state
 {
-    canonical_position PlayerP;
+    world_position PlayerP;
 };
 

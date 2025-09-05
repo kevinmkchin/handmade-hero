@@ -25,11 +25,15 @@ typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
+typedef int32 bool32;
+
 typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
-typedef int32 bool32;
+
+typedef size_t memory_index;
+
 typedef float real32;
 typedef double real64;
 
@@ -201,59 +205,25 @@ typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 // platform layer does not need to know about these:
 //
 
-struct tile_chunk_position
+#include "handmade_intrinsics.h"
+#include "handmade_tile.h"
+
+struct memory_arena
 {
-    uint32 TileChunkX;
-    uint32 TileChunkY;
-
-    uint32 RelTileX;
-    uint32 RelTileY;
-};
-
-struct world_position
-{
-    /* TODO(Kevin):
-        Take the tile map x and y
-        and the tile x and y
-
-        and pack them into single 32 bit values for x and y where there is some low
-        bits for the tile index and the high bits are the tile "page"
-
-        we can eliminate the need for floor
-    */
-    uint32 AbsTileX;
-    uint32 AbsTileY;
-
-    // TODO(Kevin): Should these be from the center of the tile?
-    // TODO(Kevin): Rename to offset X and Y
-    real32 TileRelX;
-    real32 TileRelY;
-};
-
-struct tile_chunk
-{
-    uint32 *Tiles;
+    memory_index Size;
+    uint8 *Base;
+    memory_index Used;
 };
 
 struct world
 {
-    uint32 ChunkShift;
-    uint32 ChunkMask;
-    uint32 ChunkDim;
-
-    real32 TileSideInMeters;
-    int32 TileSideInPixels;
-    real32 PixelsPerMeter;
-
-    // TODO(Kevin): beginner's sparseness
-    int32 TileChunkCountX;
-    int32 TileChunkCountY;
-
-    tile_chunk *TileChunks;
+    tile_map *TileMap;
 };
 
 struct game_state
 {
-    world_position PlayerP;
+    memory_arena WorldArena;
+    world *World;
+    tile_map_position PlayerP;
 };
 

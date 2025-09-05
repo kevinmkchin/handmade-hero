@@ -10,13 +10,15 @@
 inline int32
 RoundReal32ToInt32(real32 Real32)
 {
-    // TODO(Kevin): Intrinsic?
-    if (Real32 > 0.f)
-        return (int32)(Real32 + 0.5f);
-    else if (Real32 < 0.f)
-        return (int32)(Real32 - 0.5f);
-    else
-        return 0;
+    int32 Result = (int32)roundf(Real32);
+    return Result;
+}
+
+inline int32
+RoundReal32ToUInt32(real32 Real32)
+{
+    uint32 Result = (uint32)roundf(Real32);
+    return Result;
 }
 
 inline int32

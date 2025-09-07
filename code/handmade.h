@@ -12,14 +12,37 @@
         1 - Slow code welcome.
 */
 
+//
+// NOTE(Kevin): Compilers
+//
+#ifndef COMPILER_MSVC
+#define COMPILER_MSVC 0
+#endif
+
+#ifndef COMPILER_LLVM
+#define COMPILER_LLVM 0
+#endif
+
+#if !COMPILER_MSVC && !COMPILER_LLVM
+#if _MSC_VER
+#undef COMPILER_MSVC
+#define COMPILER_MSVC 1
+#else
+// TODO(Kevin): More compilers
+#undef COMPILER_LLVM
+#define COMPILER_LLVM 1
+#endif
+#endif
+
+#if COMPILER_MSVC
+#include <intrin.h>
+#pragma intrinsic(_BitScanForward)
+#endif
+
+//
+// NOTE(Kevin): Types
+//
 #include <stdint.h>
-#include <math.h>
-
-#define internal static             // static functions are internal to the translation unit
-#define local_persist static        // local static variable
-#define global_variable static      // global static variable
-
-#define Pi32 3.14159265359f
 
 typedef int8_t int8;
 typedef int16_t int16;
@@ -36,6 +59,12 @@ typedef size_t memory_index;
 
 typedef float real32;
 typedef double real64;
+
+#define internal static             // static functions are internal to the translation unit
+#define local_persist static        // local static variable
+#define global_variable static      // global static variable
+
+#define Pi32 3.14159265359f
 
 #if HANDMADE_SLOW
 // TODO(Kevin): Complete assertion macro

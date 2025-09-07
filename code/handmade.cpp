@@ -88,15 +88,6 @@ DrawBitmap(game_offscreen_buffer *Buffer, loaded_bitmap *Bitmap, real32 RealX, r
     if (MaxY > Buffer->Height)
         MaxY = Buffer->Height;
 
-    // uint32 Color = 0xFF000000 |
-    //                ((uint32)RoundReal32ToInt32(R * 255.0f)) << 16 |
-    //                ((uint32)RoundReal32ToInt32(G * 255.0f)) << 8 |
-    //                ((uint32)RoundReal32ToInt32(B * 255.0f)) << 0;
-
-    // uint8 *Row = ((uint8 *)Buffer->Memory +
-    //               MinX*Buffer->BytesPerPixel +
-    //               MinY*Buffer->Pitch);
-
     // TODO(Kevin): SourceRow needs to be changed based on clipping.
     uint32 *SourceRow = Bitmap->Pixels + (Bitmap->Width * (Bitmap->Height - 1));
     uint8 *DestRow = (uint8 *)Buffer->Memory +
@@ -108,24 +99,25 @@ DrawBitmap(game_offscreen_buffer *Buffer, loaded_bitmap *Bitmap, real32 RealX, r
         uint32 *Dest = (uint32 *)DestRow;
         for (int X = MinX; X < MaxX; ++X)
         {
-#if 0
-            // real32 DstA = (real32)((*Dest >> 24) & 0xFF) / 255.f;
-            // real32 DstR = (real32)((*Dest >> 16) & 0xFF) / 255.f;
-            // real32 DstG = (real32)((*Dest >> 8) & 0xFF) / 255.f;
-            // real32 DstB = (real32)((*Dest >> 0) & 0xFF) / 255.f;
-            // real32 SrcA = (real32)((*Source >> 24) & 0xFF) / 255.f;
-            // real32 SrcR = (real32)((*Source >> 16) & 0xFF) / 255.f;
-            // real32 SrcG = (real32)((*Source >> 8) & 0xFF) / 255.f;
-            // real32 SrcB = (real32)((*Source >> 0) & 0xFF) / 255.f;
-            // ((uint8 *)Dest)[3] = (uint8)((SrcA * SrcA + DstA * (1.0f - SrcA)) * 255.f);
-            // ((uint8 *)Dest)[2] = (uint8)((SrcR * SrcA + DstR * (1.0f - SrcA)) * 255.f);
-            // ((uint8 *)Dest)[1] = (uint8)((SrcG * SrcA + DstG * (1.0f - SrcA)) * 255.f);
-            // ((uint8 *)Dest)[0] = (uint8)((SrcB * SrcA + DstB * (1.0f - SrcA)) * 255.f);
-            // Dest++;
-            // Source++;
-#else
-            *Dest++ = *Source++;
-#endif
+            real32 A = (real32)((*Source >> 24) & 0xFF) / 255.0f;
+            real32 DR = (real32)((*Dest >> 16) & 0xFF);
+            real32 DG = (real32)((*Dest >> 8) & 0xFF);
+            real32 DB = (real32)((*Dest >> 0) & 0xFF);
+            real32 SR = (real32)((*Source >> 16) & 0xFF);
+            real32 SG = (real32)((*Source >> 8) & 0xFF);
+            real32 SB = (real32)((*Source >> 0) & 0xFF);
+            
+            // TODO(Kevin): Premultiplied alpha - this is not premultiplied alpha
+            real32 R = (1.0f - A)*DR + A*SR;
+            real32 G = (1.0f - A)*DG + A*SG;
+            real32 B = (1.0f - A)*DB + A*SB;
+
+            *Dest = ((uint32)(R + 0.5f) << 16) |
+                    ((uint32)(G + 0.5f) << 8) |
+                    ((uint32)(B + 0.5f) << 0);
+
+            ++Dest;
+            ++Source;
         }
         SourceRow -= Bitmap->Width;
         DestRow += Buffer->Pitch;
@@ -171,19 +163,42 @@ DEBUGLoadBMP(thread_context *Thread, debug_platform_read_entire_file *ReadEntire
     {
         bitmap_header *Header = (bitmap_header *)ReadResult.Contents;
         uint32 *Pixels = (uint32 *)((uint8 *)ReadResult.Contents + Header->BitmapOffset);
-        
+
+        Assert(Header->Compression == 3);
+
         // NOTE(Kevin): If you are using this generically for some reason,
         // please remember that BMP files can go in either direction and
         // the height can be negative for top-down.
         // (Also, there can be compression, etc... DON'T think this is
         // compelete BMP loading code because it isnt!)
+
+        // NOTE(Kevin): Byte order in memory is determined by the Header itself,
+        // so we have to read out the masks and convert the pixels ourselves.
+        uint32 RedMask = Header->RedMask;
+        uint32 GreenMask = Header->GreenMask;
+        uint32 BlueMask = Header->BlueMask;
+        uint32 AlphaMask = ~(RedMask | GreenMask | BlueMask);
+
+        bit_scan_result RedShift = FindLeastSignificantSetBit(RedMask);
+        bit_scan_result GreenShift = FindLeastSignificantSetBit(GreenMask);
+        bit_scan_result BlueShift = FindLeastSignificantSetBit(BlueMask);
+        bit_scan_result AlphaShift = FindLeastSignificantSetBit(AlphaMask);
+
+        Assert(RedShift.Found);
+        Assert(GreenShift.Found);
+        Assert(BlueShift.Found);
+        Assert(AlphaShift.Found);
+
         uint32 *SourceDest = Pixels;
         for (int32 Y = 0; Y < Header->Height; ++Y)
         {
             for (int32 X = 0; X < Header->Width; ++X)
             {
-                *SourceDest = (*SourceDest >> 8) | (*SourceDest << 24);
-                ++SourceDest;
+                uint32 C = *SourceDest;
+                *SourceDest++ = (((C >> AlphaShift.Index) & 0xFF) << 24) |
+                                (((C >> RedShift.Index) & 0xFF) << 16) |
+                                (((C >> GreenShift.Index) & 0xFF) << 8) |
+                                (((C >> BlueShift.Index) & 0xFF) << 0);
             }
         }
 
@@ -379,8 +394,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     int32 TileSideInPixels = 60;
     real32 PixelsPerMeter = (real32)TileSideInPixels / (real32)TileMap->TileSideInMeters;
-    // real32 LowerLeftX = -(real32)TileSideInPixels/2;
-    // real32 LowerLeftY = (real32)Buffer->Height;
 
     for (int ControllerIndex = 0;
          ControllerIndex < ArrayCount(Input->Controllers);
@@ -520,15 +533,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     real32 PlayerB = 0.0f;
     real32 PlayerLeft = ScreenCenterX - 0.5f*PixelsPerMeter*PlayerWidth;
     real32 PlayerTop = ScreenCenterY - PixelsPerMeter*PlayerHeight;
-#if 1
-    DrawBitmap(Buffer, &GameState->HeroHead, PlayerLeft, PlayerTop);
-#else
     DrawRectangle(Buffer,
                   PlayerLeft, PlayerTop, 
                   PlayerLeft + PixelsPerMeter * PlayerWidth, 
                   PlayerTop + PixelsPerMeter * PlayerHeight, 
                   PlayerR, PlayerG, PlayerB);
-#endif
+    DrawBitmap(Buffer, &GameState->HeroHead, PlayerLeft, PlayerTop);
 }
 
 extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples)

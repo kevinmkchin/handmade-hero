@@ -21,12 +21,16 @@ Platform Layer TODO
 
 #pragma comment(lib, "ole32.lib")
 #define HANDMADE_WIN32_OPEN_CONSOLE 0
+#define HANDMADE_WIN32_FORCE_OFF_DWM_DPI_SCALING 1
 
 #include "handmade.h"
 
 #include <windows.h>
 #include <stdio.h>
 #include <malloc.h>
+#if HANDMADE_WIN32_FORCE_OFF_DWM_DPI_SCALING
+#include <shellscalingapi.h>
+#endif
 #include <xinput.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
@@ -320,19 +324,23 @@ internal void
 Win32DisplayBufferInWindow(win32_offscreen_buffer *Buffer, 
     HDC DeviceContext, int WindowWidth, int WindowHeight)
 {
+    int IntScale = 1;
+#if HANDMADE_WIN32_FORCE_OFF_DWM_DPI_SCALING
+    IntScale = 2;
+#endif
     int OffsetX = 10;
     int OffsetY = 10;
 
     PatBlt(DeviceContext, 0, 0, WindowWidth, OffsetY, BLACKNESS);
-    PatBlt(DeviceContext, 0, OffsetY + Buffer->Height, WindowWidth, WindowHeight, BLACKNESS);
+    PatBlt(DeviceContext, 0, OffsetY + Buffer->Height * IntScale, WindowWidth, WindowHeight, BLACKNESS);
     PatBlt(DeviceContext, 0, 0, OffsetX, WindowHeight, BLACKNESS);
-    PatBlt(DeviceContext, OffsetX + Buffer->Width, 0, WindowWidth, WindowHeight, BLACKNESS);
+    PatBlt(DeviceContext, OffsetX + Buffer->Width * IntScale, 0, WindowWidth, WindowHeight, BLACKNESS);
 
     // NOTE(Kevin): For prototyping purposes, we're going to always blit
     // 1-to-1 pixels to make sure we don't introduce artifacts with
     // stretching while we are learning to code the renderer.
     StretchDIBits(DeviceContext,
-        OffsetX, OffsetY, Buffer->Width, Buffer->Height,
+        OffsetX, OffsetY, Buffer->Width * IntScale, Buffer->Height * IntScale,
         0, 0, Buffer->Width, Buffer->Height,
         Buffer->Memory,
         &Buffer->Info,
@@ -719,6 +727,11 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
     Win32LoadXInput();
 
+#if HANDMADE_WIN32_FORCE_OFF_DWM_DPI_SCALING
+    // NOTE(Kevin): For writing debug rendering code atm, turn off DWM compositor's
+    // DPI scaling! Otherwise not pixel perfect.
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+#endif
     // NOTE(Kevin): 1080p display mode is 1920x1080
     //  1920 -> 2048 = 2048 - 1920 -> 128
     //  1080 -> 2048 = 2048 - 1080 -> 968

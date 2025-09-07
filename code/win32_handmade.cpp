@@ -20,6 +20,7 @@ Platform Layer TODO
 */
 
 #pragma comment(lib, "ole32.lib")
+#define HANDMADE_WIN32_OPEN_CONSOLE 0
 
 #include "handmade.h"
 
@@ -258,7 +259,7 @@ Win32LoadXInput()
     }
 }
 
-#if 0
+#if HANDMADE_WIN32_OPEN_CONSOLE
 internal void
 OpenConsole()
 {
@@ -711,11 +712,17 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     }
     bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
 
-    // OpenConsole();
+#if HANDMADE_WIN32_OPEN_CONSOLE
+    OpenConsole();
+#endif
     // printf("Handmade Hero\n");
 
     Win32LoadXInput();
 
+    // NOTE(Kevin): 1080p display mode is 1920x1080
+    //  1920 -> 2048 = 2048 - 1920 -> 128
+    //  1080 -> 2048 = 2048 - 1080 -> 968
+    //  1024 + 128 = 1152
     Win32ResizeDIBSection(&GlobalBackbuffer, 960, 540);
 
     WNDCLASSA WindowClass = {};

@@ -60,14 +60,75 @@ DrawRectangle(game_offscreen_buffer *Buffer,
                   MinX*Buffer->BytesPerPixel +
                   MinY*Buffer->Pitch);
 
-    for(int Y = MinY; Y < MaxY; ++Y)
+    for (int Y = MinY; Y < MaxY; ++Y)
     {
         uint32 *Pixel = (uint32 *)Row;
-        for(int X = MinX; X < MaxX; ++X)
+        for (int X = MinX; X < MaxX; ++X)
         {
             *Pixel++ = Color;
         }
         Row += Buffer->Pitch;
+    }
+}
+
+internal void
+DrawBitmap(game_offscreen_buffer *Buffer, loaded_bitmap *Bitmap, real32 RealX, real32 RealY)
+{
+    int32 MinX = RoundReal32ToInt32(RealX);
+    int32 MinY = RoundReal32ToInt32(RealY);
+    int32 MaxX = RoundReal32ToInt32(RealX + (real32)Bitmap->Width);
+    int32 MaxY = RoundReal32ToInt32(RealY + (real32)Bitmap->Height);
+
+    if (MinX < 0)
+        MinX = 0;
+    if (MinY < 0)
+        MinY = 0;
+    if (MaxX > Buffer->Width)
+        MaxX = Buffer->Width;
+    if (MaxY > Buffer->Height)
+        MaxY = Buffer->Height;
+
+    // uint32 Color = 0xFF000000 |
+    //                ((uint32)RoundReal32ToInt32(R * 255.0f)) << 16 |
+    //                ((uint32)RoundReal32ToInt32(G * 255.0f)) << 8 |
+    //                ((uint32)RoundReal32ToInt32(B * 255.0f)) << 0;
+
+    // uint8 *Row = ((uint8 *)Buffer->Memory +
+    //               MinX*Buffer->BytesPerPixel +
+    //               MinY*Buffer->Pitch);
+
+    // TODO(Kevin): SourceRow needs to be changed based on clipping.
+    uint32 *SourceRow = Bitmap->Pixels + (Bitmap->Width * (Bitmap->Height - 1));
+    uint8 *DestRow = (uint8 *)Buffer->Memory +
+                     MinX * Buffer->BytesPerPixel +
+                     MinY * Buffer->Pitch;
+    for (int Y = MinY; Y < MaxY; ++Y)
+    {
+        uint32 *Source = SourceRow;
+        uint32 *Dest = (uint32 *)DestRow;
+        for (int X = MinX; X < MaxX; ++X)
+        {
+#if 0
+            // real32 DstA = (real32)((*Dest >> 24) & 0xFF) / 255.f;
+            // real32 DstR = (real32)((*Dest >> 16) & 0xFF) / 255.f;
+            // real32 DstG = (real32)((*Dest >> 8) & 0xFF) / 255.f;
+            // real32 DstB = (real32)((*Dest >> 0) & 0xFF) / 255.f;
+            // real32 SrcA = (real32)((*Source >> 24) & 0xFF) / 255.f;
+            // real32 SrcR = (real32)((*Source >> 16) & 0xFF) / 255.f;
+            // real32 SrcG = (real32)((*Source >> 8) & 0xFF) / 255.f;
+            // real32 SrcB = (real32)((*Source >> 0) & 0xFF) / 255.f;
+            // ((uint8 *)Dest)[3] = (uint8)((SrcA * SrcA + DstA * (1.0f - SrcA)) * 255.f);
+            // ((uint8 *)Dest)[2] = (uint8)((SrcR * SrcA + DstR * (1.0f - SrcA)) * 255.f);
+            // ((uint8 *)Dest)[1] = (uint8)((SrcG * SrcA + DstG * (1.0f - SrcA)) * 255.f);
+            // ((uint8 *)Dest)[0] = (uint8)((SrcB * SrcA + DstB * (1.0f - SrcA)) * 255.f);
+            // Dest++;
+            // Source++;
+#else
+            *Dest++ = *Source++;
+#endif
+        }
+        SourceRow -= Bitmap->Width;
+        DestRow += Buffer->Pitch;
     }
 }
 
@@ -84,22 +145,51 @@ struct bitmap_header
     int32   Height;
     uint16  Planes;
     uint16  BitsPerPixel;
+    uint32  Compression;
+    uint32  SizeOfBitmap;
+    int32   HorzResolution;
+    int32   VertResolution;
+    uint32  ColorsUsed;
+    uint32  ColorsImportant;
+    uint32  RedMask;
+    uint32  GreenMask;
+    uint32  BlueMask;
 };
 #pragma pack(pop)
 
-internal uint32 *
+internal loaded_bitmap
 DEBUGLoadBMP(thread_context *Thread, debug_platform_read_entire_file *ReadEntireFile, char *FileName)
 {
-    uint32 *Result = 0;
+    loaded_bitmap Result = {};
 
+    // NOTE(Kevin): Casey's bitmaps are saved as AA BB GG RR, bottom up.
+    // In little endian -> 0xRRGGBBAA
+    // ACTUALLY, his hero bitmaps are BB GG RR AA...
     debug_read_file_result ReadResult = ReadEntireFile(Thread, FileName);
 
     if (ReadResult.ContentsSize != 0)
     {
         bitmap_header *Header = (bitmap_header *)ReadResult.Contents;
-        Result = (uint32 *)((uint8 *)ReadResult.Contents + Header->BitmapOffset);
+        uint32 *Pixels = (uint32 *)((uint8 *)ReadResult.Contents + Header->BitmapOffset);
+        
+        // NOTE(Kevin): If you are using this generically for some reason,
+        // please remember that BMP files can go in either direction and
+        // the height can be negative for top-down.
+        // (Also, there can be compression, etc... DON'T think this is
+        // compelete BMP loading code because it isnt!)
+        uint32 *SourceDest = Pixels;
+        for (int32 Y = 0; Y < Header->Height; ++Y)
+        {
+            for (int32 X = 0; X < Header->Width; ++X)
+            {
+                *SourceDest = (*SourceDest >> 8) | (*SourceDest << 24);
+                ++SourceDest;
+            }
+        }
 
-        int Y = 5;
+        Result.Pixels = Pixels;
+        Result.Width = Header->Width;
+        Result.Height = Header->Height;
     }
 
     return Result;
@@ -117,7 +207,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     game_state *GameState = (game_state *)Memory->PermanentStorage;
     if (!Memory->IsInitialized)
     {
-        GameState->PixelPointer = DEBUGLoadBMP(Thread, Memory->DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+        // DEBUGLoadBMP(Thread, Memory->DEBUGPlatformReadEntireFile, "structured_art.bmp");
+        GameState->Backdrop =
+            DEBUGLoadBMP(Thread, Memory->DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+        GameState->HeroHead =
+            DEBUGLoadBMP(Thread, Memory->DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
+        GameState->HeroCape =
+            DEBUGLoadBMP(Thread, Memory->DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
+        GameState->HeroTorso =
+            DEBUGLoadBMP(Thread, Memory->DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
 
         GameState->PlayerP.AbsTileX = 1;
         GameState->PlayerP.AbsTileY = 3;
@@ -364,8 +462,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         }
     }
 
+
+#if 0
     DrawRectangle(Buffer, 0.f, 0.f, (real32)Buffer->Width, (real32)Buffer->Height,
                   1.f, 0.f, 1.f);
+#endif
+    DrawBitmap(Buffer, &GameState->Backdrop, 0.f, 0.f);
 
     real32 ScreenCenterX = 0.5f*(real32)Buffer->Width;
     real32 ScreenCenterY = 0.5f*(real32)Buffer->Height;
@@ -383,7 +485,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             uint32 Height = GameState->PlayerP.AbsTileZ;
             uint32 TileID = GetTileValue(TileMap, Column, Row, Height);
          
-            if (TileID > 0)
+            if (TileID > 1)
             {
                 real32 Gray = 0.5f;
 
@@ -418,22 +520,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     real32 PlayerB = 0.0f;
     real32 PlayerLeft = ScreenCenterX - 0.5f*PixelsPerMeter*PlayerWidth;
     real32 PlayerTop = ScreenCenterY - PixelsPerMeter*PlayerHeight;
+#if 1
+    DrawBitmap(Buffer, &GameState->HeroHead, PlayerLeft, PlayerTop);
+#else
     DrawRectangle(Buffer,
                   PlayerLeft, PlayerTop, 
                   PlayerLeft + PixelsPerMeter * PlayerWidth, 
                   PlayerTop + PixelsPerMeter * PlayerHeight, 
                   PlayerR, PlayerG, PlayerB);
-
-#if 0
-    uint32 *Source = GameState->PixelPointer;
-    uint32 *Dest = (uint32 *)Buffer->Memory;
-    for (int32 Y = 0; Y < Buffer->Height; ++Y)
-    {
-        for (int32 X = 0; X < Buffer->Width; ++X)
-        {
-            *Dest++ = *Source++;
-        }
-    }
 #endif
 }
 

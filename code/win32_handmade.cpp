@@ -7,10 +7,7 @@ Platform Layer TODO
 - Threading (launch a thread)
 - Raw Input (support for multiple keyboards)
 - ClipCursor (multimonitor support)
-- Fullscreen support
-- WM_SETCURSOR (control cursor visibility)
 - QueryCancelAutoplay
-- WM_ACTIVATEAPP (for when we are not the active application)
 - Blit speed improvements (BitBlt)
 - Hardware acceleration (OpenGL or Direct3D)
 - GetKeyboardLayout (for French keyboards, international WASD support)
@@ -40,6 +37,8 @@ Platform Layer TODO
 global_variable bool GlobalRunning;
 global_variable win32_offscreen_buffer GlobalBackbuffer;
 global_variable int64 GlobalPerfCountFrequency; 
+global_variable bool32 DEBUGGlobalShowCursor;
+global_variable WINDOWPLACEMENT GlobalWindowPosition = {sizeof(GlobalWindowPosition)};
 
 // NOTE(Kevin): This is our support for XInputGetState
 // define function prototype once (so I can change it once here and changes everywhere)
@@ -329,11 +328,9 @@ Win32DisplayBufferInWindow(win32_offscreen_buffer *Buffer,
     HDC DeviceContext, int WindowWidth, int WindowHeight)
 {
     int IntScale = 1;
-#if HANDMADE_WIN32_FORCE_OFF_DWM_DPI_SCALING
-    IntScale = 2;
-#endif
-    int OffsetX = 10;
-    int OffsetY = 10;
+    IntScale = WindowWidth / Buffer->Width;
+    int OffsetX = IntScale > 2 ? 0 : 10;
+    int OffsetY = IntScale > 2 ? 0 : 10;
 
     PatBlt(DeviceContext, 0, 0, WindowWidth, OffsetY, BLACKNESS);
     PatBlt(DeviceContext, 0, OffsetY + Buffer->Height * IntScale, WindowWidth, WindowHeight, BLACKNESS);
@@ -370,6 +367,19 @@ Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
         case WM_CLOSE:
         {
             GlobalRunning = false;
+        } break;
+
+        case WM_SETCURSOR:
+        {
+            if (DEBUGGlobalShowCursor)
+            {
+                Result = DefWindowProcA(Window, Message, WParam, LParam);
+            }
+            else
+            {
+                SetCursor(0);
+                Result = TRUE;
+            }
         } break;
 
         case WM_ACTIVATEAPP:
@@ -539,6 +549,38 @@ Win32PlayBackInput(win32_state *State, game_input *NewInput)
     }
 }
 
+internal void
+ToggleFullscreen(HWND Window)
+{
+    // NOTE(Kevin): This follows Raymond Chen's prescription
+    // for fullscreen toggling, see:
+    // http://blogs.msdn.com/b/oldnewthing/archive/2010/04/12/9994016.aspx
+
+    DWORD Style = GetWindowLong(Window, GWL_STYLE);
+    if(Style & WS_OVERLAPPEDWINDOW)
+    {
+        MONITORINFO MonitorInfo = {sizeof(MonitorInfo)};
+        if(GetWindowPlacement(Window, &GlobalWindowPosition) &&
+           GetMonitorInfo(MonitorFromWindow(Window, MONITOR_DEFAULTTOPRIMARY), &MonitorInfo))
+        {
+            SetWindowLong(Window, GWL_STYLE, Style & ~WS_OVERLAPPEDWINDOW);
+            SetWindowPos(Window, HWND_TOP,
+                         MonitorInfo.rcMonitor.left, MonitorInfo.rcMonitor.top,
+                         MonitorInfo.rcMonitor.right - MonitorInfo.rcMonitor.left,
+                         MonitorInfo.rcMonitor.bottom - MonitorInfo.rcMonitor.top,
+                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+    }
+    else
+    {
+        SetWindowLong(Window, GWL_STYLE, Style | WS_OVERLAPPEDWINDOW);
+        SetWindowPlacement(Window, &GlobalWindowPosition);
+        SetWindowPos(Window, 0, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+}
+
 internal void 
 Win32ProcessPendingMessages(win32_state *State, game_controller_input *KeyboardController)
 {
@@ -655,13 +697,22 @@ Win32ProcessPendingMessages(win32_state *State, game_controller_input *KeyboardC
                         }
                     }
 #endif
-
                 }
 
-                bool32 AltKeyDown = (Message.lParam & (1 << 29));
-                if (AltKeyDown && VKCode == VK_F4)
+                if(IsDown)
                 {
-                    GlobalRunning = false;
+                    bool32 AltKeyDown = (Message.lParam & (1 << 29));
+                    if(AltKeyDown && VKCode == VK_F4)
+                    {
+                        GlobalRunning = false;
+                    }
+                    if(AltKeyDown && VKCode == VK_RETURN)
+                    {
+                        if(Message.hwnd)
+                        {
+                            ToggleFullscreen(Message.hwnd);
+                        }
+                    }
                 }
             } break;
 
@@ -746,10 +797,15 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     //  1024 + 128 = 1152
     Win32ResizeDIBSection(&GlobalBackbuffer, 960, 540);
 
+#if HANDMADE_INTERNAL
+    DEBUGGlobalShowCursor = true;
+#endif
+
     WNDCLASSA WindowClass = {};
     WindowClass.style = CS_HREDRAW|CS_VREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
     WindowClass.hInstance = Instance;
+    WindowClass.hCursor = LoadCursor(0, IDC_CROSS);
     //WindowClass.hIcon = ;
     WindowClass.lpszClassName = "HandmadeHeroWindowClass";
 

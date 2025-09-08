@@ -1,5 +1,12 @@
 #pragma once
 
+struct tile_map_difference
+{
+    real32 dX;
+    real32 dY;
+    real32 dZ;
+};
+
 struct tile_map_position
 {
     // NOTE(Kevin): These are fixed point tile locations.

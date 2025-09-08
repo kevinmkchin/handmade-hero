@@ -10,10 +10,14 @@ IF NOT EXIST build mkdir build
 pushd build
 del *.pdb > NUL 2> NUL
 REM Optimization switches /O2 /Oi /fp:fast
+echo WAITING FOR PDB > lock.tmp
 cl %CommonCompilerFlags% -LD ..\code\handmade.cpp -Fmhandmade.map /link -incremental:no -PDB:handmade_%ts%.pdb -EXPORT:GameUpdateAndRender -EXPORT:GameGetSoundSamples
+del lock.tmp
 cl %CommonCompilerFlags% ..\code\win32_handmade.cpp -Fmwin32_handmade.map /link %CommonLinkerFlags%
 popd
 
 
 rem when PDB name does not match binary name, Superluminal is not able to find debug info
+rem I could probably just write the correct PDB name when I know I want to profile in superluminal
+rem or just have that be default and only the hot-reload PDBs get the random names
 

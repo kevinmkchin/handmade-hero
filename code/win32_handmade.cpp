@@ -204,22 +204,26 @@ Win32GetLastWriteTime(char *Filepath)
 }
 
 internal win32_game_code
-Win32LoadGameCode(char *SourceDLLName, char *TempDLLName)
+Win32LoadGameCode(char *SourceDLLName, char *TempDLLName, char *LockFileName)
 {
     win32_game_code Result = {};
 
-    if (CopyFile(SourceDLLName, TempDLLName, FALSE))
+    WIN32_FILE_ATTRIBUTE_DATA Ignored;
+    if(!GetFileAttributesEx(LockFileName, GetFileExInfoStandard, &Ignored))
     {
-        Result.GameCodeDLL = LoadLibraryA(TempDLLName);
-        if (Result.GameCodeDLL)
+        if (CopyFile(SourceDLLName, TempDLLName, FALSE))
         {
-            Result.DLLLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
-            Result.UpdateAndRender = (game_update_and_render *)
-                GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
-            Result.GetSoundSamples = (game_get_sound_samples *)
-                GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
+            Result.GameCodeDLL = LoadLibraryA(TempDLLName);
+            if (Result.GameCodeDLL)
+            {
+                Result.DLLLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
+                Result.UpdateAndRender = (game_update_and_render *)
+                    GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
+                Result.GetSoundSamples = (game_get_sound_samples *)
+                    GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
 
-            Result.IsValid  = (Result.UpdateAndRender && Result.GetSoundSamples);
+                Result.IsValid  = (Result.UpdateAndRender && Result.GetSoundSamples);
+            }
         }
     }
 
@@ -710,6 +714,10 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     Win32BuildEXEPathFileName(&Win32State, "handmade_temp.dll",
         sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
 
+    char GameCodeLockFullPath[WIN32_STATE_FILE_NAME_COUNT];
+    Win32BuildEXEPathFileName(&Win32State, "lock.tmp",
+        sizeof(GameCodeLockFullPath), GameCodeLockFullPath);
+
     // NOTE(Kevin): Set the Windows scheduler granularity to 1ms
     // so that our Sleep() can be more granular.
     UINT DesiredSchedulerMS = 1;
@@ -866,7 +874,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 
                 LARGE_INTEGER LastCounter = Win32GetWallClock();
 
-                win32_game_code Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
+                win32_game_code Game = Win32LoadGameCode(SourceGameCodeDLLFullPath,
+                                                         TempGameCodeDLLFullPath,
+                                                         GameCodeLockFullPath);
 
                 while (GlobalRunning)
                 {
@@ -874,7 +884,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     if (CompareFileTime(&NewDLLWriteTime, &Game.DLLLastWriteTime) > 0)
                     {
                         Win32UnloadGameCode(&Game);
-                        Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
+                        Game = Win32LoadGameCode(SourceGameCodeDLLFullPath,
+                                                 TempGameCodeDLLFullPath,
+                                                 GameCodeLockFullPath);
                     }
 
                     NewInput->dtForFrame = TargetSecondsPerFrame;
@@ -1144,11 +1156,13 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                     OldInput = Temp;
                     *NewInput = {};
 
+#if 0
                     real64 FPS = 1000.f / MSPerFrame;
                     char PrintBuffer[256];
                     sprintf(PrintBuffer, "%.02fms/f, %.02ff/s\n", MSPerFrame, FPS);
-                    // OutputDebugStringA(PrintBuffer);
+                    OutputDebugStringA(PrintBuffer);
                     // printf(PrintBuffer);
+#endif
                 }
 
                 AudioRenderClient->Release();

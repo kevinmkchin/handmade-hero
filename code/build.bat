@@ -6,8 +6,8 @@ set CommonLinkerFlags=-incremental:no -opt:ref -subsystem:windows user32.lib gdi
 set ts=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%
 set ts=%ts: =0%%time:~3,2%%time:~6,2%
 
-IF NOT EXIST build mkdir build
-pushd build
+IF NOT EXIST ..\build mkdir ..\build
+pushd ..\build
 del *.pdb > NUL 2> NUL
 REM Optimization switches /O2 /Oi /fp:fast
 echo WAITING FOR PDB > lock.tmp

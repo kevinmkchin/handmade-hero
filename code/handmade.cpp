@@ -456,42 +456,52 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         else
         {
             // NOTE(Kevin): Use digital movement tuning
-            v2 dPlayer = {};
+            v2 ddPlayerP = {};
 
             if (Controller->MoveUp.EndedDown)
             {
                 GameState->HeroFacingDirection = 1;
-                dPlayer.Y = 1.0f;
+                ddPlayerP.Y = 1.0f;
             }
             if (Controller->MoveDown.EndedDown)
             {
                 GameState->HeroFacingDirection = 3;
-                dPlayer.Y = -1.0f;
+                ddPlayerP.Y = -1.0f;
             }
             if (Controller->MoveLeft.EndedDown)
             {
                 GameState->HeroFacingDirection = 2;
-                dPlayer.X = -1.0f;
+                ddPlayerP.X = -1.0f;
             }
             if (Controller->MoveRight.EndedDown)
             {
                 GameState->HeroFacingDirection = 0;
-                dPlayer.X = 1.0f;
+                ddPlayerP.X = 1.0f;
             }
-            real32 PlayerSpeed = 2.0f;
-            if (Controller->ActionUp.EndedDown)
-            {
-                PlayerSpeed = 10.0f;
-            }
-            dPlayer *= PlayerSpeed;
 
-            if ((dPlayer.X != 0.0f) && (dPlayer.Y != 0.0f))
+            if ((ddPlayerP.X != 0.0f) && (ddPlayerP.Y != 0.0f))
             {
-                dPlayer *= 0.707106781187f;
+                ddPlayerP *= 0.707106781187f;
             }
+
+            // Casey forgot to skip the unconnected controllers so this part ticks
+            // 4 times for him.
+            real32 PlayerSpeed = 40.0f; // m/s^2
+            if(Controller->ActionUp.EndedDown)
+            {
+                PlayerSpeed = 200.0f; // m/s^2
+            }
+            ddPlayerP *= PlayerSpeed;
+
+            // TODO(Kevin): ODE here!
+            ddPlayerP += -6.0f*GameState->dPlayerP;
 
             tile_map_position NewPlayerP = GameState->PlayerP;
-            NewPlayerP.Offset += Input->dtForFrame*dPlayer;
+            NewPlayerP.Offset = 0.5f*ddPlayerP*Square(Input->dtForFrame) +
+                                 GameState->dPlayerP*Input->dtForFrame +
+                                 NewPlayerP.Offset;
+            GameState->dPlayerP = ddPlayerP*Input->dtForFrame + GameState->dPlayerP;
+
             NewPlayerP = RecanonicalizePosition(TileMap, NewPlayerP);
 
             tile_map_position NewPlayerLeft = NewPlayerP;

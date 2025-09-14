@@ -61,4 +61,10 @@ inline v2 operator+=(v2 &A, v2 B)
     return A;
 }
 
+inline real32 Square(real32 A)
+{
+    real32 Result = A*A;
+    return Result;
+}
+
 #endif // HANDMADE_MATH_H

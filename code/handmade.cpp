@@ -444,10 +444,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     {
         game_controller_input *Controller = GetController(Input, ControllerIndex);
 
-        if (!Controller->IsConnected)
-        {
-            continue;
-        }
+        // TODO(Kevin): Casey forgot to skip the unconnected controllers 
+        // so the movement code ticks 4 times for him...
+        // if (!Controller->IsConnected)
+        // {
+        //     continue;
+        // }
 
         if (Controller->IsAnalog)
         {
@@ -484,17 +486,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 ddPlayerP *= 0.707106781187f;
             }
 
-            // Casey forgot to skip the unconnected controllers so this part ticks
-            // 4 times for him.
-            real32 PlayerSpeed = 40.0f; // m/s^2
+            real32 PlayerSpeed = 10.0f; // m/s^2
             if(Controller->ActionUp.EndedDown)
             {
-                PlayerSpeed = 200.0f; // m/s^2
+                PlayerSpeed = 50.0f; // m/s^2
             }
             ddPlayerP *= PlayerSpeed;
 
             // TODO(Kevin): ODE here!
-            ddPlayerP += -6.0f*GameState->dPlayerP;
+            ddPlayerP += -1.5f*GameState->dPlayerP;
 
             tile_map_position NewPlayerP = GameState->PlayerP;
             NewPlayerP.Offset = 0.5f*ddPlayerP*Square(Input->dtForFrame) +
@@ -512,9 +512,47 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             NewPlayerRight.Offset.X += 0.5f * PlayerWidth;
             NewPlayerRight = RecanonicalizePosition(TileMap, NewPlayerRight);
 
-            if (IsTileMapPointEmpty(TileMap, NewPlayerP) &&
-                IsTileMapPointEmpty(TileMap, NewPlayerLeft) &&
-                IsTileMapPointEmpty(TileMap, NewPlayerRight))
+            bool32 Collided = false;
+            tile_map_position ColP = {};
+            if (!IsTileMapPointEmpty(TileMap, NewPlayerP))
+            {
+                ColP = NewPlayerP;
+                Collided = true;
+            }
+            if (!IsTileMapPointEmpty(TileMap, NewPlayerLeft))
+            {
+                ColP = NewPlayerLeft;
+                Collided = true;
+            }
+            if (!IsTileMapPointEmpty(TileMap, NewPlayerRight))
+            {
+                ColP = NewPlayerRight;
+                Collided = true;
+            }
+
+            if (Collided)
+            {
+                v2 r = {};
+                if (ColP.AbsTileX < GameState->PlayerP.AbsTileX)
+                {
+                    r = v2{1, 0};
+                }
+                if (ColP.AbsTileX > GameState->PlayerP.AbsTileX)
+                {
+                    r = v2{-1, 0};
+                }
+                if (ColP.AbsTileY < GameState->PlayerP.AbsTileY)
+                {
+                    r = v2{0, 1};
+                }
+                if (ColP.AbsTileY > GameState->PlayerP.AbsTileY)
+                {
+                    r = v2{0, -1};
+                }
+
+                GameState->dPlayerP = GameState->dPlayerP - 1 * Dot(GameState->dPlayerP, r) * r;
+            }
+            else
             {
                 if (!AreOnSameTile(&GameState->PlayerP, &NewPlayerP))
                 {

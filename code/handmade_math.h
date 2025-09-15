@@ -73,4 +73,10 @@ inline real32 Dot(v2 A,  v2 B)
     return Result;
 }
 
+inline real32 LengthSq(v2 A)
+{
+    real32 Result = Dot(A, A);
+    return Result;
+}
+
 #endif // HANDMADE_MATH_H

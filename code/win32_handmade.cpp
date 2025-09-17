@@ -995,6 +995,10 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                         game_controller_input *NewController = GetController(NewInput, OurControllerIndex);
 
                         XINPUT_STATE ControllerState;
+                        // TODO(Kevin): XInputGetState is slow to poll unconnected controller ports.
+                        // See if I can wait for WM_DEVICECHANGE event to check which controller ports 
+                        // are connected. Otherwise, I can just query the ports I KNOW are connected.
+                        // MS DXTK simply throttles retry to once per second.
                         if (XInputGetState(ControllerIndex, &ControllerState) == ERROR_SUCCESS)
                         {
                             NewController->IsConnected = true;

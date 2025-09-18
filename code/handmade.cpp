@@ -279,11 +279,16 @@ MovePlayer(game_state *GameState, entity *Entity, real32 dt, v2 ddP)
 {
     tile_map *TileMap = GameState->World->TileMap;
 
+    real32 ddPLengthSq = LengthSq(ddP);
+    if (ddPLengthSq > 1.0f)
+    {
+        ddP *= (1.0f / SquareRoot(ddPLengthSq));
+        // normalize * MaxAccel (1)
+        // ddP / sqrt(ddPLength);
+        // ddP ???;
+    }
+
     real32 PlayerSpeed = 50.0f; // m/s^2
-    // if(Controller->ActionUp.EndedDown)
-    // {
-    //     PlayerSpeed = 50.0f; // m/s^2
-    // }
     ddP *= PlayerSpeed;
 
     // TODO(Kevin): ODE here!
@@ -342,20 +347,20 @@ MovePlayer(game_state *GameState, entity *Entity, real32 dt, v2 ddP)
             r = v2{0, -1};
         }
 
-        Entity->dP = Entity->dP - 1 * Dot(Entity->dP, r) * r;
+        Entity->dP = Entity->dP - 2 * Dot(Entity->dP, r) * r;
     }
     else
     {
         Entity->P = NewPlayerP;
     }
 #else
-    uint32 MinTileX = 0;
-    uint32 MinTileY = 0;
-    uint32 OnePastMaxTileX = 3;
-    uint32 OnePastMaxTileY = 3;
+    uint32 MinTileX = Minimum(OldPlayerP.AbsTileX, NewPlayerP.X);
+    uint32 MinTileY = Minimum(OldPlayerP.AbsTileY, NewPlayerP.Y);
+    uint32 OnePastMaxTileX = Maximum(OldPlayerP.AbsTileX, NewPlayerP.AbsTileX) + 1;
+    uint32 OnePastMaxTileY = Maximum(OldPlayerP.AbsTileY, NewPlayerP.AbsTileY) + 1;
+
     uint32 AbsTileZ = Entity->P.AbsTileZ;
-    tile_map_position BestPlayerP = Entity->P;
-    real32 BestDistanceSq = LengthSq(PlayerDelta);
+    real32 tMin = 1.0f;
     for (uint32 AbsTileY = MinTileY;
          AbsTileY != OnePastMaxTileY;
          ++AbsTileY)
@@ -366,25 +371,17 @@ MovePlayer(game_state *GameState, entity *Entity, real32 dt, v2 ddP)
         {
             tile_map_position TestTileP = CenteredTilePoint(AbsTileX, AbsTileY, AbsTileZ);
             uint32 TileValue = GetTileValue(TileMap, TestTileP);
-            if (IsTileValueEmpty(TileValue))
+            if (!IsTileValueEmpty(TileValue))
             {
                 v2 MinCorner = -0.5f*v2{TileMap->TileSideInMeters, TileMap->TileSideInMeters};
                 v2 MaxCorner = 0.5f*v2{TileMap->TileSideInMeters, TileMap->TileSideInMeters};
 
-                // TODO(Kevin): must adjust Min Max based on player radius. since we want to
-                // treat player as a circle, we need rounding around corners s.t. circle is
-                // only ever its radius away from the corner.
-                // TODO(Kevin): also, it seems wrong to use player AbsTileZ here before
-                // checking for stairs which update player AbsTileZ
-
                 tile_map_difference RelNewPlayerP = Subtract(TileMap, &TestTileP, &NewPlayerP);
-                v2 TestP = ClosestPointInRectangle(MinCorner, MaxCorner, RelNewPlayerP);
-                real32 TestDistanceSq = ...;
-                if (BestDistanceSq > TestDistanceSq)
-                {
-                    BestPlayerP = ...;
-                    BestDistanceSq = ...;
-                }
+                v2 Rel = RelNewPlayerP.dXY;
+
+                // TODO(Kevin): Test all four walls and take the minimum t;
+                tResult = (WallX - RelNewPlayerP.X) / PlayerDelta.X;
+                TestWall(MinCorner.X, MinCorner.Y, MaxCorner.Y, RelNewPlayerP.X);
             }
         }
     }
@@ -691,11 +688,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                 if (Controller->MoveRight.EndedDown)
                 {
                     ddP.X = 1.0f;
-                }
-
-                if ((ddP.X != 0.0f) && (ddP.Y != 0.0f))
-                {
-                    ddP *= 0.707106781187f;
                 }
             }
 

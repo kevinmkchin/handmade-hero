@@ -7,6 +7,13 @@
 
 #include <math.h>
 
+inline int32
+SignOf(int32 Value)
+{
+    int32 Result = (Value >= 0) ? 1 : -1;
+    return(Result);
+}
+
 inline real32
 SquareRoot(real32 Real32)
 {
@@ -54,6 +61,13 @@ FloorReal32ToInt32(real32 Real32)
 {
     int32 Result = (int32)floorf(Real32);
     return Result;
+}
+
+inline int32 
+CeilReal32ToInt32(real32 Real32)
+{
+    int32 Result = (int32)ceilf(Real32);
+    return(Result);
 }
 
 inline int32

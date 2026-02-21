@@ -292,10 +292,13 @@ struct hero_bitmaps
 
 struct high_entity
 {
-    bool32 Exists;
     v2 P; // NOTE(Kevin): Already relative to the camera!
     v2 dP;
+    uint32 AbsTileZ;
     uint32 FacingDirection;
+
+    real32 Z;
+    real32 dZ;
 };
 
 struct low_entity
@@ -306,14 +309,18 @@ struct dormant_entity
 {
     tile_map_position P;
     real32 Width, Height;
+
+    // NOTE(Kevin): This is for "stairs"
+    bool32 Collides;
+    int32 dAbsTileZ;
 };
 
 enum entity_residence
 {
     EntityResidence_NonExistant,
-    EntityResidence_High,
-    EntityResidence_Low,
     EntityResidence_Dormant,
+    EntityResidence_Low,
+    EntityResidence_High,
 };
 
 struct entity
@@ -335,12 +342,13 @@ struct game_state
     uint32 PlayerIndexForController[ArrayCount(((game_input *)0)->Controllers)];
 
     uint32 EntityCount;
-    entity_residence EntityResidency[256];
+    entity_residence EntityResidence[256];
     high_entity HighEntities[256];
     low_entity LowEntities[256];
     dormant_entity DormantEntities[256];
 
     loaded_bitmap Backdrop;
+    loaded_bitmap Shadow;
     hero_bitmaps HeroBitmaps[4];
 };
 

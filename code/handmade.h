@@ -291,7 +291,7 @@ struct high_entity
 {
     v2 P; // NOTE(Kevin): Already relative to the camera!
     v2 dP;
-    uint32 AbsTileZ;
+    uint32 ChunkZ;
     uint32 FacingDirection;
 
     real32 Z;

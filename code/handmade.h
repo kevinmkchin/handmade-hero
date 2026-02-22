@@ -343,10 +343,12 @@ struct game_state
     low_entity LowEntities[100000];
 
     uint32 HighEntityCount;
-    high_entity HighEntities[256];
+    high_entity HighEntities[512];
 
     loaded_bitmap Backdrop;
     loaded_bitmap Shadow;
     hero_bitmaps HeroBitmaps[4];
+
+    loaded_bitmap Tree;
 };
 

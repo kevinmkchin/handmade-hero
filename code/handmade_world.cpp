@@ -117,7 +117,7 @@ RecanonicalizeCoord(world *World, int32 *Chunk, real32 *ChunkRel)
 }
 
 inline world_position
-MapIntoTileSpace(world *World, world_position BasePos, v2 Offset)
+MapIntoChunkSpace(world *World, world_position BasePos, v2 Offset)
 {
     world_position Result = BasePos;
 
@@ -138,6 +138,7 @@ ChunkPositionFromTilePosition(world *World, int32 AbsTileX, int32 AbsTileY, int3
     Result.ChunkY = AbsTileY / TILES_PER_CHUNK;
     Result.ChunkZ = AbsTileZ / TILES_PER_CHUNK;
 
+    // TODO(Kevin): Decide on tile alignment in chunks
     Result.Offset_ = V2((real32)(AbsTileX - (Result.ChunkX * TILES_PER_CHUNK)) * World->TileSideInMeters,
                         (real32)(AbsTileY - (Result.ChunkY * TILES_PER_CHUNK)) * World->TileSideInMeters);
 
@@ -150,14 +151,14 @@ Subtract(world *World, world_position *A, world_position *B)
 {
     world_difference Result;
 
-    v2 dTileXY = { (real32)A->ChunkX - (real32)B->ChunkX,
+    v2 dChunkXY = { (real32)A->ChunkX - (real32)B->ChunkX,
                    (real32)A->ChunkY - (real32)B->ChunkY };
-    real32 dTileZ = (real32)A->ChunkZ - (real32)B->ChunkZ;
+    real32 dChunkZ = (real32)A->ChunkZ - (real32)B->ChunkZ;
     
-    Result.dXY = World->ChunkSideInMeters*dTileXY + (A->Offset_ - B->Offset_);
+    Result.dXY = World->ChunkSideInMeters*dChunkXY + (A->Offset_ - B->Offset_);
 
     // TODO(Kevin): Think about what we want to do about Z
-    Result.dZ = World->ChunkSideInMeters*dTileZ;
+    Result.dZ = World->ChunkSideInMeters*dChunkZ;
 
     return(Result);
 }
@@ -179,13 +180,14 @@ ChangeEntityLocation(memory_arena *Arena, world *World, uint32 LowEntityIndex,
             Assert(Chunk);
             if (Chunk)
             {
+                bool32 NotFound = true;
                 for (world_entity_block *Block = &Chunk->FirstBlock;
-                     Block;
+                     Block && NotFound;
                      Block = Block->Next)
                 {
                     world_entity_block *FirstBlock = &Chunk->FirstBlock;
                     for (uint32 Index = 0;
-                         Index < Block->EntityCount;
+                         (Index < Block->EntityCount) && NotFound;
                          ++Index)
                     {
                         if (Block->LowEntityIndex[Index] == LowEntityIndex)
@@ -204,8 +206,7 @@ ChangeEntityLocation(memory_arena *Arena, world *World, uint32 LowEntityIndex,
                                 }
                             }
 
-                            Block = 0;
-                            break;
+                            NotFound = false;
                         }
                     }
                 }

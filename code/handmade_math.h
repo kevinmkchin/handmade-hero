@@ -10,7 +10,6 @@ union v2
     real32 E[2];
 };
 
-// TODO(Kevin): Consider v2 A = v2{5, 3}; ?
 inline v2
 V2(real32 X, real32 Y)
 {
@@ -94,6 +93,27 @@ struct rectangle2
     v2 Min;
     v2 Max;
 };
+
+inline v2
+GetMinCorner(rectangle2 Rect)
+{
+    v2 Result = Rect.Min;
+    return Result;
+}
+
+inline v2
+GetMaxCorner(rectangle2 Rect)
+{
+    v2 Result = Rect.Max;
+    return Result;
+}
+
+inline v2
+GetCenter(rectangle2 Rect)
+{
+    v2 Result = 0.5f * (Rect.Min + Rect.Max);
+    return Result;
+}
 
 inline rectangle2
 RectMinMax(v2 Min, v2 Max)

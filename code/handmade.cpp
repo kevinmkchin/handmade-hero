@@ -453,7 +453,7 @@ AddFamiliar(game_state *GameState, uint32 AbsTileX, uint32 AbsTileY, uint32 AbsT
 
     Entity.Low->Height = 0.5f;
     Entity.Low->Width = 1.0f;
-    Entity.Low->Collides = false;
+    Entity.Low->Collides = true;
 
     return Entity;
 }
@@ -753,6 +753,10 @@ UpdateFamiliar(game_state *GameState, entity Entity, real32 dt)
         if (TestEntity.Low->Type == EntityType_Hero)
         {
             real32 TestDSq = LengthSq(TestEntity.High->P - Entity.High->P);
+            if (TestEntity.Low->Type == EntityType_Hero)
+            {
+                TestDSq *= 0.75f;
+            }
             if (ClosestHeroDSq > TestDSq)
             {
                 ClosestHero = TestEntity;
@@ -762,7 +766,7 @@ UpdateFamiliar(game_state *GameState, entity Entity, real32 dt)
     }
 
     v2 ddP = {};
-    if (ClosestHero.High)
+    if (ClosestHero.High && (ClosestHeroDSq > 0.1f))
     {
         // TODO(Kevin): pull speed out of move entity
         real32 Acceleration = 0.5f;
@@ -981,7 +985,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
                                                    CameraTileZ);
 
         AddMonstar(GameState, CameraTileX+2, CameraTileY+2, CameraTileZ);
-        AddFamiliar(GameState, CameraTileX-2, CameraTileY+2, CameraTileZ);
+
+        for (int FamiliarIndex = 0; FamiliarIndex < 1; ++FamiliarIndex)
+        {
+            int32 FamiliarOffsetX = RandomNumberTable[RandomNumberIndex++] % 10 - 7;
+            int32 FamiliarOffsetY = RandomNumberTable[RandomNumberIndex++] % 10 - 3;
+            AddFamiliar(GameState, CameraTileX+FamiliarOffsetX, CameraTileY+FamiliarOffsetY, CameraTileZ);
+        }
 
         SetCamera(GameState, NewCameraP);
 
@@ -1138,8 +1148,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
             case EntityType_Familiar:
             {
                 UpdateFamiliar(GameState, Entity, dt);
+                Entity.High->tBob += dt;
+                if (Entity.High->tBob > (2.0f * Pi32))
+                {
+                    Entity.High->tBob -= (2.0f * Pi32);
+                }
+
                 PushPiece(&PieceGroup, &GameState->Shadow, V2(0,0), 0, HeroBitmaps->Align, ShadowAlpha);
-                PushPiece(&PieceGroup, &HeroBitmaps->Head, V2(0,0), 0, HeroBitmaps->Align);                
+                PushPiece(&PieceGroup, &HeroBitmaps->Head, V2(0,0), 20.0f*Sin(2.0f*Entity.High->tBob), HeroBitmaps->Align);
             } break;
 
             case EntityType_Monstar:

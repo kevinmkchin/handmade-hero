@@ -133,14 +133,30 @@ ChunkPositionFromTilePosition(world *World, int32 AbsTileX, int32 AbsTileY, int3
 {
     world_position Result = {};
 
-    // TODO(Kevin): Move to 3D Z!
     Result.ChunkX = AbsTileX / TILES_PER_CHUNK;
     Result.ChunkY = AbsTileY / TILES_PER_CHUNK;
     Result.ChunkZ = AbsTileZ / TILES_PER_CHUNK;
 
+    // TODO(Kevin): fix
+    if (AbsTileX < 0)
+    {
+        --Result.ChunkX;
+    }
+    if (AbsTileY < 0)
+    {
+        --Result.ChunkY;
+    }
+    if (AbsTileZ < 0)
+    {
+        --Result.ChunkZ;
+    }
+
     // TODO(Kevin): Decide on tile alignment in chunks
-    Result.Offset_ = V2((real32)(AbsTileX - (Result.ChunkX * TILES_PER_CHUNK)) * World->TileSideInMeters,
-                        (real32)(AbsTileY - (Result.ChunkY * TILES_PER_CHUNK)) * World->TileSideInMeters);
+    Result.Offset_.X = (real32)((AbsTileX - TILES_PER_CHUNK/2) - (Result.ChunkX * TILES_PER_CHUNK)) * World->TileSideInMeters;
+    Result.Offset_.Y = (real32)((AbsTileY - TILES_PER_CHUNK/2) - (Result.ChunkY * TILES_PER_CHUNK)) * World->TileSideInMeters;
+    // TODO(Kevin): Move to 3D Z!
+
+    Assert(IsCanonical(World, Result.Offset_));
 
     return Result;
 }

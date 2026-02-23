@@ -293,6 +293,8 @@ struct high_entity
     uint32 ChunkZ;
     uint32 FacingDirection;
 
+    real32 tBob;
+
     real32 Z;
     real32 dZ;
 

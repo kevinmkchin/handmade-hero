@@ -202,10 +202,13 @@ ChangeEntityLocationRaw(memory_arena *Arena, world *World, uint32 LowEntityIndex
 {
     // TODO(Kevin): if this moves an entity into camera bounds, should it automatically
     //              go into the high set immediately?
+    //              If it moves out of the camera bounds should it be removed from the high set
+    //              immediately?
 
     Assert(!OldP || IsValid(*OldP));
+    Assert(!NewP || IsValid(*NewP));
 
-    if (OldP && AreInSameChunk(World, OldP, NewP))
+    if (OldP && NewP && AreInSameChunk(World, OldP, NewP))
     {
         // NOTE(Kevin): Leave entity where it is
     }

@@ -1,6 +1,59 @@
 #pragma once
 
 /*
+  TODO(Kevin):
+
+  ARCHITECTURE EXPLORATION
+  - Collision detection?
+    - Entry/exit?
+    - What's the plan for robustness / shape definition?
+  - Implement multiple sim regions per frame
+    - Per-entity clocking
+    - Sim region merging?  For multiple players?
+  - Z!
+    - Clean up things by using v3
+    - Figure out how you go "up" and "down", and how is this rendered?
+
+  - Debug code
+    - Logging
+    - Diagramming
+    - (A LITTLE GUI, but only a little!) Switches / sliders / etc.
+    
+  - Audio
+    - Sound effect triggers
+    - Ambient sounds
+    - Music
+  - Asset streaming
+    
+  - Metagame / save game?
+    - How do you enter "save slot"?
+    - Persistent unlocks/etc.
+    - Do we allow saved games?  Probably yes, just only for "pausing",
+    * Continuous save for crash recovery?
+  - Rudimentary world gen (no quality, just "what sorts of things" we do)
+    - Placement of background things
+    - Connectivity?
+    - Non-overlapping?
+    - Map display
+      - Magnets - how they work???
+  - AI
+    - Rudimentary monstar behavior example
+    * Pathfinding
+    - AI "storage"
+      
+  * Animation, should probably lead into rendering
+    - Skeletal animation
+    - Particle systems
+
+  PRODUCTION
+  - Rendering
+  -> GAME
+    - Entity system
+    - World generation
+*/
+
+
+/*
     NOTE(Kevin):
 
     HANDMADE_INTERNAL:
@@ -331,6 +384,15 @@ struct controlled_hero
     real32 dZ;
 };
 
+struct pairwise_collision_rule
+{
+    bool32 ShouldCollide;
+    uint32 StorageIndexA;
+    uint32 StorageIndexB;
+    
+    pairwise_collision_rule *NextInHash;
+};
+
 struct game_state
 {
     memory_arena WorldArena;
@@ -353,6 +415,10 @@ struct game_state
     loaded_bitmap Tree;
     loaded_bitmap Sword;
     real32 MetersToPixels;
+
+    // TODO(Kevin): Must be power of two
+    pairwise_collision_rule *CollisionRuleHash[256];
+    pairwise_collision_rule *FirstFreeCollisionRule;
 };
 
 // TODO(Kevin): This is dumb, this should just be part of
@@ -377,3 +443,6 @@ GetLowEntity(game_state *GameState, uint32 Index)
 
     return(Result);
 }
+
+internal void AddCollisionRule(game_state *GameState, uint32 StorageIndexA, uint32 StorageIndexB, bool32 ShouldCollide);
+internal void ClearCollisionRulesFor(game_state *GameState, uint32 StorageIndex);
